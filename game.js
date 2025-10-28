@@ -22,6 +22,7 @@ const PATH_RADIUS = 1; // path width = 2*radius+1 tiles
 
 // State
 let g;
+let scoreText;
 let uiText;
 let sceneRef;
 let map = [];
@@ -47,6 +48,8 @@ let terraformMode = false;
 let meteorMode = false;
 let endUI = null;
 let paused = false;
+let pauseUI = null;
+let pauseBtnTxt = null;
 let towersBuiltByType = { fire: 0, den: 0, crypt: 0 };
 let speedMult = 1;
 let baseGemColors = [];
@@ -111,7 +114,8 @@ function gridToXY(c, r) { return { x: c * TILE + TILE / 2, y: r * TILE + TILE / 
 function create() {
   sceneRef = this;
   g = this.add.graphics();
-  uiText = this.add.text(MAP_W + 10, 280, '', { fontFamily: 'Arial, sans-serif', fontSize: '12px', color: C.text, wordWrap: { width: PANEL_W - 20 } });
+  scoreText = this.add.text(MAP_W + 10, 225, '', { fontFamily: 'Arial, sans-serif', fontSize: '20px', color: C.text, wordWrap: { width: PANEL_W - 20 } });
+  uiText = this.add.text(MAP_W + 10, 270, '', { fontFamily: 'Arial, sans-serif', fontSize: '12px', color: C.text, wordWrap: { width: PANEL_W - 20 } });
   baseGemColors = [GEM_COLORS[0], GEM_COLORS[1], GEM_COLORS[2], GEM_COLORS[3], GEM_COLORS[4]];
 
   buildMapAndPath();
@@ -142,7 +146,7 @@ function setupInput(scene) {
     if (e.key.toLowerCase() === 'm') meteorMode = !meteorMode, terraformMode = false;
     if (e.key.toLowerCase() === 'r' && gameEnded) restart();
     if (e.key.toLowerCase() === 'x') sellMode = !sellMode;
-    if (e.key.toLowerCase() === 'p') paused = !paused;
+    if (e.key.toLowerCase() === 'p') setPaused(!paused);
   });
   // Robust hotkeys
   scene.input.keyboard.on('keydown-N', () => {
@@ -195,16 +199,10 @@ function setupInput(scene) {
 
 function setupUI(scene) {
   const px = MAP_W;
-  // Pause button
-  const pauseRect = scene.add.rectangle(px + PANEL_W / 2, 26, PANEL_W - 20, 30, 0x666666, 0.6).setStrokeStyle(2, 0xffffff, 0.4).setInteractive({ useHandCursor: true });
-  const pauseTxt = scene.add.text(px + PANEL_W / 2, 26, 'Pause', { fontFamily: 'Arial, sans-serif', fontSize: '14px', color: '#ffffff' }).setOrigin(0.5);
-  pauseRect.on('pointerdown', () => {
-    paused = !paused;
-    pauseTxt.setText(paused ? 'Resume' : 'Pause');
-  });
+  // (moved pause button to bottom, below speed)
   // Towers group outline and label
-  scene.add.rectangle(px + PANEL_W / 2, 120, PANEL_W - 10, 142, 0x000000, 0).setStrokeStyle(2, 0x2a3a4a, 0.8);
-  scene.add.text(px + 12, 54, 'Towers (100 c + 10 each)', { fontFamily: 'Arial, sans-serif', fontSize: '12px', color: '#ccccff' });
+  scene.add.rectangle(px + PANEL_W / 2, 76, PANEL_W - 10, 142, 0x000000, 0).setStrokeStyle(2, 0x2a3a4a, 0.8);
+  scene.add.text(px + 12, 10, 'Towers (100 c + 10 each)', { fontFamily: 'Arial, sans-serif', fontSize: '12px', color: '#ccccff' });
 
   const makeBtn = (y, label, color, key) => {
     const rect = scene.add.rectangle(px + PANEL_W / 2, y, PANEL_W - 22, 34, color, 0.6).setStrokeStyle(2, 0xffffff, 0.4).setInteractive({ useHandCursor: true });
@@ -212,25 +210,25 @@ function setupUI(scene) {
     rect.on('pointerdown', () => { selectedBuild = key; terraformMode = false; meteorMode = false; });
     return { rect, txt, key, color };
   };
-  uiButtons.temple = makeBtn(88, 'Temple (Sand)', C.fire, 'temple');
-  uiButtons.den = makeBtn(128, 'Den (Earth)', C.den, 'den');
-  uiButtons.crypt = makeBtn(168, 'Crypt (Ice)', C.crypt, 'crypt');
+  uiButtons.temple = makeBtn(44, 'Temple (Sand)', C.fire, 'temple');
+  uiButtons.den = makeBtn(84, 'Den (Earth)', C.den, 'den');
+  uiButtons.crypt = makeBtn(124, 'Crypt (Ice)', C.crypt, 'crypt');
   // Terraform mode buttons
   // Terraform group outline and label
-  scene.add.rectangle(px + PANEL_W / 2, 224, PANEL_W - 10, 52, 0x000000, 0).setStrokeStyle(2, 0x2a3a4a, 0.8);
-  scene.add.text(px + 12, 202, 'Terraform (25 m)', { fontFamily: 'Arial, sans-serif', fontSize: '12px', color: '#ccccff' });
+  scene.add.rectangle(px + PANEL_W / 2, 178, PANEL_W - 10, 50, 0x000000, 0).setStrokeStyle(2, 0x2a3a4a, 0.8);
+  scene.add.text(px + 12, 158, 'Terraform (25 m)', { fontFamily: 'Arial, sans-serif', fontSize: '12px', color: '#ccccff' });
   const makeSmallBtn = (x, y, label, color, key) => {
     const rect = scene.add.rectangle(x, y, 44, 24, color, 0.5).setStrokeStyle(1, 0xffffff, 0.6).setInteractive({ useHandCursor: true });
     const txt = scene.add.text(x, y, label, { fontFamily: 'Arial, sans-serif', fontSize: '12px', color: '#ffffff' }).setOrigin(0.5);
     rect.on('pointerdown', () => { selectedBuild = key; terraformMode = true; meteorMode = false; });
     return { rect, txt };
   };
-  makeSmallBtn(px + 36, 230, 'Sand', C.sand, 'temple');
-  makeSmallBtn(px + 82, 230, 'Earth', C.earth, 'den');
-  makeSmallBtn(px + 128, 230, 'Ice', C.ice, 'crypt');
+  makeSmallBtn(px + 32, 186, 'Sand', C.sand, 'temple');
+  makeSmallBtn(px + 80, 186, 'Earth', C.earth, 'den');
+  makeSmallBtn(px + 128, 186, 'Ice', C.ice, 'crypt');
 
   // Speed toggle at bottom
-  const speedY = 560;
+  const speedY = 530;
   const speedRect = scene.add.rectangle(px + PANEL_W / 2, speedY, PANEL_W - 20, 30, 0x334455, 0.6).setStrokeStyle(2, 0xffffff, 0.4).setInteractive({ useHandCursor: true });
   const speedTxt = scene.add.text(px + PANEL_W / 2, speedY, 'Speed x1', { fontFamily: 'Arial, sans-serif', fontSize: '14px', color: '#ffffff' }).setOrigin(0.5);
   const refreshSpeedBtn = () => {
@@ -239,6 +237,13 @@ function setupUI(scene) {
   };
   speedRect.on('pointerdown', () => { speedMult = speedMult === 1 ? 3 : 1; refreshSpeedBtn(); });
   refreshSpeedBtn();
+
+  // Pause button at bottom (below speed)
+  const pauseY = 564;
+  const pauseRect = scene.add.rectangle(px + PANEL_W / 2, pauseY, PANEL_W - 20, 26, 0x666666, 0.6).setStrokeStyle(2, 0xffffff, 0.4).setInteractive({ useHandCursor: true });
+  const pauseTxt = scene.add.text(px + PANEL_W / 2, pauseY, 'Pause', { fontFamily: 'Arial, sans-serif', fontSize: '14px', color: '#ffffff' }).setOrigin(0.5);
+  pauseBtnTxt = pauseTxt;
+  pauseRect.on('pointerdown', () => { setPaused(!paused); });
 }
 
 function buildMapAndPath() {
@@ -742,6 +747,43 @@ function castFrostNova() {
 
 function inside(c, r) { return c >= 0 && r >= 0 && c < COLS && r < ROWS; }
 
+function setPaused(b) {
+  if (paused === b) return;
+  paused = b;
+  if (pauseBtnTxt) pauseBtnTxt.setText(paused ? 'Resume' : 'Pause');
+  if (paused) showPauseOverlay(); else hidePauseOverlay();
+}
+
+function showPauseOverlay() {
+  const scene = sceneRef || (game && game.scene && game.scene.scenes[0]);
+  if (!scene) return;
+  if (pauseUI) { pauseUI.destroy(); pauseUI = null; }
+  const container = scene.add.container(0, 0);
+  const overlay = scene.add.graphics();
+  overlay.fillStyle(0x000000, 0.65).fillRect(0, 0, 800, 600);
+  container.add(overlay);
+
+  const title = scene.add.text(400, 240, 'Paused', { fontFamily: 'Arial, sans-serif', fontSize: '36px', color: '#ffffff' }).setOrigin(0.5);
+  container.add(title);
+
+  const makeBtn = (y, label, onClick) => {
+    const rect = scene.add.rectangle(400, y, 180, 36, 0x334455, 0.85).setStrokeStyle(2, 0xffffff, 0.6).setInteractive({ useHandCursor: true });
+    const txt = scene.add.text(400, y, label, { fontFamily: 'Arial, sans-serif', fontSize: '16px', color: '#ffffff' }).setOrigin(0.5);
+    rect.on('pointerdown', onClick);
+    container.add(rect);
+    container.add(txt);
+  };
+
+  makeBtn(320, 'Resume', () => { setPaused(false); });
+  makeBtn(370, 'Restart', () => { setPaused(false); restart(); });
+
+  pauseUI = container;
+}
+
+function hidePauseOverlay() {
+  if (pauseUI) { pauseUI.destroy(); pauseUI = null; }
+}
+
 function draw() {
   g.clear();
 
@@ -830,10 +872,10 @@ function draw() {
   const cost = 100 + (towersBuiltByType[selectedBuild] || 0) * 10;
   const nextReady = !waveInProgress && wave < totalWaves && enemies.length === 0 && spawnQueue.length === 0;
   const waveText = wave >= totalWaves ? `${wave}/${totalWaves}` : `${Math.max(0, wave)}/${totalWaves}${nextReady ? ` (in ${Math.ceil(timeToNextWave)}s)` : ''}`;
+  scoreText.setText(`Score: ${Math.floor(scoreDamage)}`);
   uiText.setText(
-    `Score: ${Math.floor(scoreDamage)}\n` +
     `Safe Gems: ${gemsAtBase}/5\n` +
-    `Wave: ${waveText}\n` +
+    `Wave: ${waveText}\n\n` +
     `Coins (c): ${coins}\n` +
     `Mana (m): ${Math.floor(mana)}\n\n` +
     `Build Temple [1] (${(towersBuiltByType.temple || 0) * 10 + 100} c)\n` +
@@ -867,6 +909,8 @@ function draw() {
     const active = b.key === selectedBuild;
     b.rect.setStrokeStyle(active ? 3 : 2, active ? 0xffff66 : 0xffffff, active ? 0.9 : 0.4);
   });
+
+  // Pause overlay is added/removed via setPaused(); draw() does not paint it
 }
 
 function drawGem(x, y, s, col) {
@@ -906,6 +950,7 @@ function restart() {
   map = []; navPath = []; towers = []; enemies = []; bullets = []; gemsOnGround = [];
   beams = []; explodeEffects = []; pendingShots = [];
   if (endUI) { endUI.destroy(); endUI = null; }
+  if (pauseUI) { pauseUI.destroy(); pauseUI = null; }
   paused = false;
   coins = 330; mana = 50; wave = 0; waveInProgress = false; timeToNextWave = 10; spawnQueue = []; spawnTimer = 0; gemsAtBase = 5; gemsLost = 0; towersBuilt = 0; selectedBuild = 'temple'; gameEnded = false; scoreDamage = 0; touchedGem = false; terraformMode = false; meteorMode = false;
   towersBuiltByType = { fire: 0, den: 0, crypt: 0 };
