@@ -49,6 +49,7 @@ let endUI = null;
 let paused = false;
 let towersBuiltByType = { fire: 0, den: 0, crypt: 0 };
 let speedMult = 1;
+let baseGemColors = [];
 const METEOR_COST = 200;
 const METEOR_RADIUS = 96;
 const METEOR_DMG = 150;
@@ -111,6 +112,7 @@ function create() {
   sceneRef = this;
   g = this.add.graphics();
   uiText = this.add.text(MAP_W + 10, 280, '', { fontFamily: 'Arial, sans-serif', fontSize: '12px', color: C.text, wordWrap: { width: PANEL_W - 20 } });
+  baseGemColors = [GEM_COLORS[0], GEM_COLORS[1], GEM_COLORS[2], GEM_COLORS[3], GEM_COLORS[4]];
 
   buildMapAndPath();
   setupInput(this);
@@ -128,7 +130,7 @@ function setupInput(scene) {
     if (e.key.toLowerCase() === 'q') { selectedBuild = 'fire'; terraformMode = true; meteorMode = false; }
     if (e.key.toLowerCase() === 'w') { selectedBuild = 'den'; terraformMode = true; meteorMode = false; }
     if (e.key.toLowerCase() === 'e') { selectedBuild = 'crypt'; terraformMode = true; meteorMode = false; }
-    if (e.key === ' ') castFrostNova();
+    if (e.key === ' ') { speedMult = speedMult === 1 ? 3 : 1; }
     if (e.key.toLowerCase() === 'f') castFrostNova();
     if (e.key.toLowerCase() === 'n' && !waveInProgress && wave < totalWaves) timeToNextWave = 0;
     if (e.key.toLowerCase() === 't') {
@@ -558,6 +560,7 @@ function stepEnemies(dt) {
       if (e.dir === +1 && (!e.carrying) && (tgtIdx === pathPts.length - 1 || nearTreasure(e)) && gemsAtBase > 0) {
         e.carrying = true;
         gemsAtBase -= 1;
+        e.gemColor = baseGemColors.pop() || GEM_COLORS[0];
         touchedGem = true;
         e.idx = pathPts.length - 1;
         e.dir = -1;
@@ -579,7 +582,7 @@ function stepEnemies(dt) {
     // Death check
     if (e.hp <= 0) {
       coins += e.reward;
-      if (e.carrying) dropGem(e.x, e.y);
+      if (e.carrying) dropGem(e.x, e.y, e.gemColor);
       enemies.splice(i, 1);
     }
   }
@@ -590,8 +593,8 @@ function nearTreasure(e) {
   return Math.hypot(e.x - p.x, e.y - p.y) < TILE * 0.6;
 }
 
-function dropGem(x, y) {
-  gemsOnGround.push({ x, y, vx: 0, vy: 0, returnDelay: 4 });
+function dropGem(x, y, col) {
+  gemsOnGround.push({ x, y, vx: 0, vy: 0, returnDelay: 4, col: col || GEM_COLORS[0] });
 }
 
 function stepGems(dt) {
@@ -608,7 +611,7 @@ function stepGems(dt) {
       const step = 20 * dt; // slower return speed
       if (dist <= step) {
         gobj.x = tgt.x; gobj.y = tgt.y; gobj.idx = nextIdx;
-        if (gobj.idx >= targetIdx) { gemsOnGround.splice(i, 1); gemsAtBase += 1; continue; }
+        if (gobj.idx >= targetIdx) { baseGemColors.push(gobj.col || GEM_COLORS[0]); gemsOnGround.splice(i, 1); gemsAtBase += 1; continue; }
       } else {
         gobj.x += (dx / dist) * step;
         gobj.y += (dy / dist) * step;
@@ -621,6 +624,7 @@ function stepGems(dt) {
         e.dir = -1;
         // Ensure return path index roughly matches their current position
         e.idx = nearestIdxInPathPts(e, e.x, e.y);
+        e.gemColor = gobj.col || GEM_COLORS[0];
         gemsOnGround.splice(i, 1);
         break;
       }
@@ -779,15 +783,15 @@ function draw() {
   const base = gridToXY(treasure.c, treasure.r);
   g.fillStyle(0xffcc33, 1).fillRect(base.x - 12, base.y - 12, 24, 24);
   g.lineStyle(2, 0x996600, 1).strokeRect(base.x - 12, base.y - 12, 24, 24);
-  for (let i = 0; i < gemsAtBase; i++) {
+  for (let i = 0; i < baseGemColors.length; i++) {
     const gx = base.x + 16 + (i % 5) * 10;
     const gy = base.y - 18 - Math.floor(i / 5) * 12;
-    const col = GEM_COLORS[i % GEM_COLORS.length];
+    const col = baseGemColors[i % baseGemColors.length];
     drawGem(gx, gy, 8, col);
   }
 
   // Gems on ground
-  for (let gm of gemsOnGround) drawGem(gm.x, gm.y, 7, 0x66ffe0);
+  for (let gm of gemsOnGround) drawGem(gm.x, gm.y, 7, gm.col || 0x66ffe0);
 
   // Towers
   for (let t of towers) {
@@ -798,7 +802,7 @@ function draw() {
   // Enemies
   for (let e of enemies) {
     g.fillStyle(C.enemy, 1).fillCircle(e.x, e.y, 9);
-    if (e.carrying) drawGem(e.x, e.y - 14, 5, 0xffff88);
+    if (e.carrying) drawGem(e.x, e.y - 14, 5, e.gemColor || 0xffff88);
     // HP bar
     const w = 22, h = 3, px = e.x - w / 2, py = e.y + 12;
     g.fillStyle(C.hpBack, 1).fillRect(px, py, w, h);
@@ -829,19 +833,18 @@ function draw() {
   uiText.setText(
     `Score: ${Math.floor(scoreDamage)}\n` +
     `Safe Gems: ${gemsAtBase}/5\n` +
-    `Wave: ${waveText}\n` +
-    `Coins: ${coins}  Mana: ${Math.floor(mana)}\n\n` +
-    `Actions:\n`+
-    `Build Fire [1] (${towersBuiltByType.fire + 100} coins)\n` +
-    `Build Den [2] (${towersBuiltByType.den + 100} coins)\n` +
-    `Build Crypt [3] (${towersBuiltByType.crypt + 100} coins)\n` +
+    `Coins: ${coins}  Mana: ${Math.floor(mana)}\n` +
+    `Wave: ${waveText}\n\n` +
+    `Build Fire [1] (${(towersBuiltByType.fire || 0) * 10 + 100} coins)\n` +
+    `Build Den [2] (${(towersBuiltByType.den || 0) * 10 + 100} coins)\n` +
+    `Build Crypt [3] (${(towersBuiltByType.crypt || 0) * 10 + 100} coins)\n` +
     `Terraform [T] (25 mana)\n` +
     `Frost [F] (30 mana)\n` +
     `Meteor [M] (200 mana)\n` +
-    `Destroy [X] (+50 coins)\n` +
-    `Next [N]\n` +
-    `Pause [P]\n\n` +
-    `Speed x${speedMult}\n`
+    `Destroy [X] (+50 coins)\n\n` +
+    `Next wave [N]\n` +
+    `Pause [P]\n` +
+    `Toggle speed [Space]\n`
   );
 
   // Button selection outlines
@@ -891,5 +894,6 @@ function restart() {
   paused = false;
   coins = 330; mana = 50; wave = 0; waveInProgress = false; timeToNextWave = 10; spawnQueue = []; spawnTimer = 0; gemsAtBase = 5; gemsLost = 0; towersBuilt = 0; selectedBuild = 'fire'; gameEnded = false; scoreDamage = 0; touchedGem = false; terraformMode = false; meteorMode = false;
   towersBuiltByType = { fire: 0, den: 0, crypt: 0 };
+  baseGemColors = [GEM_COLORS[0], GEM_COLORS[1], GEM_COLORS[2], GEM_COLORS[3], GEM_COLORS[4]];
   buildMapAndPath();
 }
