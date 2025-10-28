@@ -36,6 +36,7 @@ let scoreDamage = 0;
 let touchedGem = false;
 let explodeEffects = [];
 let pendingShots = [];
+let sellMode = false;
 let start;
 let treasure;
 let uiButtons = {};
@@ -121,6 +122,7 @@ function setupInput(scene) {
     if (e.key.toLowerCase() === 't') terraformMode = !terraformMode, meteorMode = false;
     if (e.key.toLowerCase() === 'm') meteorMode = !meteorMode, terraformMode = false;
     if (e.key.toLowerCase() === 'r' && gameEnded) restart();
+    if (e.key.toLowerCase() === 'x') sellMode = !sellMode;
   });
   // Robust hotkeys
   scene.input.keyboard.on('keydown-N', () => {
@@ -147,6 +149,12 @@ function setupInput(scene) {
     if (terraformMode) {
       if (mana >= 100 && canTerraformAt(cc, rr)) { tryTerraformGroup(cc, rr); return; }
       terraformMode = false;
+    }
+    // Sell mode: destroy tower on click
+    if (sellMode) {
+      const tIdx = findTowerIndexAt(cc, rr);
+      if (tIdx !== -1) { coins += 50; towers.splice(tIdx, 1); return; }
+      // if no tower under cursor, fall through to build
     }
     if (!canPlaceTower(c, r, selectedBuild)) return;
     const cost = 100 + towersBuilt * 10;
@@ -274,6 +282,26 @@ function nearestNavIndex(x, y) {
     if (d < bestD) { bestD = d; best = i; }
   }
   return best;
+}
+
+function nearestIdxInPathPts(e, x, y) {
+  const pts = e.pathPts || navPath;
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    const dx = p.x - x, dy = p.y - y;
+    const d = dx * dx + dy * dy;
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+
+function findTowerIndexAt(cc, rr) {
+  for (let i = 0; i < towers.length; i++) {
+    const t = towers[i];
+    if (cc >= t.c && cc < t.c + (t.w || 2) && rr >= t.r && rr < t.r + (t.h || 2)) return i;
+  }
+  return -1;
 }
 
 function placeBuildClusters() {
@@ -493,11 +521,12 @@ function stepEnemies(dt) {
     const step = speed * dt;
     if (dist <= step) {
       e.x = tgt.x; e.y = tgt.y; e.idx = tgtIdx;
-      // Reached treasure?
-      if (e.dir === +1 && nearTreasure(e) && !e.carrying && gemsAtBase > 0) {
+      // Reached treasure or end of path
+      if (e.dir === +1 && (!e.carrying) && (tgtIdx === pathPts.length - 1 || nearTreasure(e)) && gemsAtBase > 0) {
         e.carrying = true;
         gemsAtBase -= 1;
         touchedGem = true;
+        e.idx = pathPts.length - 1;
         e.dir = -1;
       } else if (e.dir === -1 && e.idx === 0) {
         // Exited map
@@ -539,7 +568,7 @@ function stepGems(dt) {
       const tgt = navPath[nextIdx];
       const dx = tgt.x - gobj.x, dy = tgt.y - gobj.y;
       const dist = Math.hypot(dx, dy);
-      const step = 35 * dt; // slower return speed
+      const step = 20 * dt; // slower return speed
       if (dist <= step) {
         gobj.x = tgt.x; gobj.y = tgt.y; gobj.idx = nextIdx;
         if (gobj.idx >= targetIdx) { gemsOnGround.splice(i, 1); gemsAtBase += 1; continue; }
@@ -552,6 +581,9 @@ function stepGems(dt) {
     for (let e of enemies) {
       if (!e.carrying && Math.hypot(e.x - gobj.x, e.y - gobj.y) < 14) {
         e.carrying = true;
+        e.dir = -1;
+        // Ensure return path index roughly matches their current position
+        e.idx = nearestIdxInPathPts(e, e.x, e.y);
         gemsOnGround.splice(i, 1);
         break;
       }
@@ -698,6 +730,11 @@ function draw() {
       const ok = canPlaceTower(c0, r0, selectedBuild);
       g.fillStyle(col, ok ? 0.35 : 0.15).fillRect(c0 * TILE + 1, r0 * TILE + 1, 2 * TILE - 2, 2 * TILE - 2);
       if (!ok) g.lineStyle(2, 0xff4444, 0.7).strokeRect(c0 * TILE + 2, r0 * TILE + 2, 2 * TILE - 4, 2 * TILE - 4);
+      // Range preview
+      const cx = (c0 + 1) * TILE;
+      const cy = (r0 + 1) * TILE;
+      const r = TOWERS[selectedBuild].range;
+      g.lineStyle(1, 0xffffff, 0.25).strokeCircle(cx, cy, r);
     }
   }
 
