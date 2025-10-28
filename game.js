@@ -48,6 +48,7 @@ let meteorMode = false;
 let endUI = null;
 let paused = false;
 let towersBuiltByType = { fire: 0, den: 0, crypt: 0 };
+let speedMult = 1;
 const METEOR_COST = 200;
 const METEOR_RADIUS = 96;
 const METEOR_DMG = 150;
@@ -109,7 +110,7 @@ function gridToXY(c, r) { return { x: c * TILE + TILE / 2, y: r * TILE + TILE / 
 function create() {
   sceneRef = this;
   g = this.add.graphics();
-  uiText = this.add.text(MAP_W + 10, 280, '', { fontFamily: 'Arial, sans-serif', fontSize: '14px', color: C.text, wordWrap: { width: PANEL_W - 20 } });
+  uiText = this.add.text(MAP_W + 10, 280, '', { fontFamily: 'Arial, sans-serif', fontSize: '12px', color: C.text, wordWrap: { width: PANEL_W - 20 } });
 
   buildMapAndPath();
   setupInput(this);
@@ -199,25 +200,43 @@ function setupUI(scene) {
     paused = !paused;
     pauseTxt.setText(paused ? 'Resume' : 'Pause');
   });
+  // Towers group outline and label
+  scene.add.rectangle(px + PANEL_W / 2, 120, PANEL_W - 10, 140, 0x000000, 0).setStrokeStyle(2, 0x2a3a4a, 0.8);
+  scene.add.text(px + 12, 52, 'Towers', { fontFamily: 'Arial, sans-serif', fontSize: '12px', color: '#ccccff' });
+
   const makeBtn = (y, label, color, key) => {
-    const rect = scene.add.rectangle(px + PANEL_W / 2, y, PANEL_W - 20, 40, color, 0.6).setStrokeStyle(2, 0xffffff, 0.4).setInteractive({ useHandCursor: true });
-    const txt = scene.add.text(px + PANEL_W / 2, y, label, { fontFamily: 'Arial, sans-serif', fontSize: '14px', color: '#ffffff' }).setOrigin(0.5);
+    const rect = scene.add.rectangle(px + PANEL_W / 2, y, PANEL_W - 22, 34, color, 0.6).setStrokeStyle(2, 0xffffff, 0.4).setInteractive({ useHandCursor: true });
+    const txt = scene.add.text(px + PANEL_W / 2, y, label, { fontFamily: 'Arial, sans-serif', fontSize: '13px', color: '#ffffff' }).setOrigin(0.5);
     rect.on('pointerdown', () => { selectedBuild = key; terraformMode = false; meteorMode = false; });
     return { rect, txt, key, color };
   };
-  uiButtons.fire = makeBtn(70, 'Fire (Sand)', C.fire, 'fire');
-  uiButtons.den = makeBtn(120, 'Den (Earth)', C.den, 'den');
-  uiButtons.crypt = makeBtn(170, 'Crypt (Ice)', C.crypt, 'crypt');
+  uiButtons.fire = makeBtn(86, 'Fire (Sand)', C.fire, 'fire');
+  uiButtons.den = makeBtn(126, 'Den (Earth)', C.den, 'den');
+  uiButtons.crypt = makeBtn(166, 'Crypt (Ice)', C.crypt, 'crypt');
   // Terraform mode buttons
+  // Terraform group outline and label
+  scene.add.rectangle(px + PANEL_W / 2, 220, PANEL_W - 10, 52, 0x000000, 0).setStrokeStyle(2, 0x2a3a4a, 0.8);
+  scene.add.text(px + 12, 196, 'Terraform', { fontFamily: 'Arial, sans-serif', fontSize: '12px', color: '#ccccff' });
   const makeSmallBtn = (x, y, label, color, key) => {
     const rect = scene.add.rectangle(x, y, 44, 24, color, 0.5).setStrokeStyle(1, 0xffffff, 0.6).setInteractive({ useHandCursor: true });
     const txt = scene.add.text(x, y, label, { fontFamily: 'Arial, sans-serif', fontSize: '12px', color: '#ffffff' }).setOrigin(0.5);
     rect.on('pointerdown', () => { selectedBuild = key; terraformMode = true; meteorMode = false; });
     return { rect, txt };
   };
-  makeSmallBtn(px + 40, 210, 'Sand', C.sand, 'fire');
-  makeSmallBtn(px + 80, 210, 'Earth', C.earth, 'den');
-  makeSmallBtn(px + 120, 210, 'Ice', C.ice, 'crypt');
+  makeSmallBtn(px + 36, 224, 'Sand', C.sand, 'fire');
+  makeSmallBtn(px + 82, 224, 'Earth', C.earth, 'den');
+  makeSmallBtn(px + 128, 224, 'Ice', C.ice, 'crypt');
+
+  // Speed toggle at bottom
+  const speedY = 560;
+  const speedRect = scene.add.rectangle(px + PANEL_W / 2, speedY, PANEL_W - 20, 30, 0x334455, 0.6).setStrokeStyle(2, 0xffffff, 0.4).setInteractive({ useHandCursor: true });
+  const speedTxt = scene.add.text(px + PANEL_W / 2, speedY, 'Speed x1', { fontFamily: 'Arial, sans-serif', fontSize: '14px', color: '#ffffff' }).setOrigin(0.5);
+  const refreshSpeedBtn = () => {
+    speedRect.fillColor = speedMult === 3 ? 0x228822 : 0x334455;
+    speedTxt.setText(`Speed x${speedMult}`);
+  };
+  speedRect.on('pointerdown', () => { speedMult = speedMult === 1 ? 3 : 1; refreshSpeedBtn(); });
+  refreshSpeedBtn();
 }
 
 function buildMapAndPath() {
@@ -433,21 +452,22 @@ function update(_, dtMs) {
   const dt = Math.min(1 / 30, dtMs / 1000);
   if (gameEnded) { draw(); return; }
   if (paused) { draw(); return; }
+  const sdt = dt * speedMult;
 
   // Mana regen
-  mana = Math.min(manaCap, mana + manaRegen * dt);
+  mana = Math.min(manaCap, mana + manaRegen * sdt);
 
   // Waves
   if (!waveInProgress && wave < totalWaves) {
     if (enemies.length === 0 && spawnQueue.length === 0) {
-      timeToNextWave -= dt;
+      timeToNextWave -= sdt;
       if (timeToNextWave <= 0) { startWave(); timeToNextWave = 20; }
     } else {
       // Keep countdown visible but not decreasing while wave active
     }
   }
   if (spawnQueue.length) {
-    spawnTimer -= dt;
+    spawnTimer -= sdt;
     if (spawnTimer <= 0) {
       const t = spawnQueue.shift();
       spawnEnemy(t);
@@ -456,13 +476,13 @@ function update(_, dtMs) {
   }
 
   // Systems
-  stepEnemies(dt);
-  stepGems(dt);
-  stepTowers(dt);
-  stepPendingShots(dt);
-  stepBullets(dt);
-  stepBeams(dt);
-  stepExplosions(dt);
+  stepEnemies(sdt);
+  stepGems(sdt);
+  stepTowers(sdt);
+  stepPendingShots(sdt);
+  stepBullets(sdt);
+  stepBeams(sdt);
+  stepExplosions(sdt);
 
   // Win/Lose
   if (gemsLost >= 5 && !gameEnded) endGame(false);
@@ -807,13 +827,21 @@ function draw() {
   const nextReady = !waveInProgress && wave < totalWaves && enemies.length === 0 && spawnQueue.length === 0;
   const waveText = wave >= totalWaves ? `${wave}/${totalWaves}` : `${Math.max(0, wave)}/${totalWaves}${nextReady ? ` (in ${Math.ceil(timeToNextWave)}s)` : ''}`;
   uiText.setText(
+    `Score: ${Math.floor(scoreDamage)}\n` +
+    `Safe Gems: ${gemsAtBase}/5\n` +
     `Wave: ${waveText}\n` +
-    `Gems: ${gemsAtBase}  Lost: ${gemsLost}\n` +
-    `Coins: ${coins}  Mana: ${Math.floor(mana)}  Score: ${Math.floor(scoreDamage)}\n` +
-    `Build [1/2/3]: ${selectedBuild.toUpperCase()}  Cost: ${cost}\n` +
-    `Terraform: T cycle | Q Sand | W Earth | E Ice (25)\n` +
-    `Abilities: Space/F Frost (30) | M Meteor (200)\n` +
-    `Modes: X Sell/Destroy | N Next | P Pause`
+    `Coins: ${coins}  Mana: ${Math.floor(mana)}\n\n` +
+    `Actions:\n`+
+    `Build Fire [1] (${towersBuiltByType.fire + 100} coins)\n` +
+    `Build Den [2] (${towersBuiltByType.den + 100} coins)\n` +
+    `Build Crypt [3] (${towersBuiltByType.crypt + 100} coins)\n` +
+    `Terraform [T] (25 mana)\n` +
+    `Frost [F] (30 mana)\n` +
+    `Meteor [M] (200 mana)\n` +
+    `Destroy [X] (+50 coins)\n` +
+    `Next [N]\n` +
+    `Pause [P]\n\n` +
+    `Speed x${speedMult}\n`
   );
 
   // Button selection outlines
