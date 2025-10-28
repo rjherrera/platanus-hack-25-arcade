@@ -66,7 +66,7 @@ let spawnQueue = [];
 let spawnTimer = 0;
 let gemsAtBase = 5;
 let towersBuilt = 0;
-let selectedBuild = 'fire'; // 'fire' (sand), 'den' (earth), 'crypt' (ice)
+let selectedBuild = 'temple'; // 'temple' (sand), 'den' (earth), 'crypt' (ice)
 let gameEnded = false;
 
 // Colors
@@ -97,8 +97,8 @@ const ENEMIES = {
 
 // Tower blueprints
 const TOWERS = {
-  // Fire: frequent, low-damage continuous beams (nerfed more)
-  fire: { range: 90, rate: 0.12, dmg: 1, bullet: 240, burnDps: 6, burnSec: 3, color: C.fire },
+  // Temple: frequent, low-damage continuous beams (nerfed more)
+  temple: { range: 90, rate: 0.12, dmg: 1, bullet: 240, burnDps: 6, burnSec: 3, color: C.fire },
   // Den: slower rate, lower DPS
   den: { range: 120, rate: 0.8, dmg: 12, bullet: 320, color: C.den },
   // Crypt: slower cycle, slightly less damage
@@ -123,11 +123,11 @@ function create() {
 function setupInput(scene) {
   scene.input.keyboard.on('keydown', (e) => {
     if (gameEnded) return;
-    if (e.key === '1') { selectedBuild = 'fire'; terraformMode = false; meteorMode = false; }
+    if (e.key === '1') { selectedBuild = 'temple'; terraformMode = false; meteorMode = false; }
     if (e.key === '2') { selectedBuild = 'den'; terraformMode = false; meteorMode = false; }
     if (e.key === '3') { selectedBuild = 'crypt'; terraformMode = false; meteorMode = false; }
     // Terraform per-type hotkeys
-    if (e.key.toLowerCase() === 'q') { selectedBuild = 'fire'; terraformMode = true; meteorMode = false; }
+    if (e.key.toLowerCase() === 'q') { selectedBuild = 'temple'; terraformMode = true; meteorMode = false; }
     if (e.key.toLowerCase() === 'w') { selectedBuild = 'den'; terraformMode = true; meteorMode = false; }
     if (e.key.toLowerCase() === 'e') { selectedBuild = 'crypt'; terraformMode = true; meteorMode = false; }
     if (e.key === ' ') { speedMult = speedMult === 1 ? 3 : 1; }
@@ -136,7 +136,7 @@ function setupInput(scene) {
     if (e.key.toLowerCase() === 't') {
       if (!terraformMode) { terraformMode = true; meteorMode = false; }
       else {
-        selectedBuild = selectedBuild === 'fire' ? 'den' : selectedBuild === 'den' ? 'crypt' : 'fire';
+        selectedBuild = selectedBuild === 'temple' ? 'den' : selectedBuild === 'den' ? 'crypt' : 'temple';
       }
     }
     if (e.key.toLowerCase() === 'm') meteorMode = !meteorMode, terraformMode = false;
@@ -212,7 +212,7 @@ function setupUI(scene) {
     rect.on('pointerdown', () => { selectedBuild = key; terraformMode = false; meteorMode = false; });
     return { rect, txt, key, color };
   };
-  uiButtons.fire = makeBtn(86, 'Fire (Sand)', C.fire, 'fire');
+  uiButtons.temple = makeBtn(86, 'Temple (Sand)', C.fire, 'temple');
   uiButtons.den = makeBtn(126, 'Den (Earth)', C.den, 'den');
   uiButtons.crypt = makeBtn(166, 'Crypt (Ice)', C.crypt, 'crypt');
   // Terraform mode buttons
@@ -225,7 +225,7 @@ function setupUI(scene) {
     rect.on('pointerdown', () => { selectedBuild = key; terraformMode = true; meteorMode = false; });
     return { rect, txt };
   };
-  makeSmallBtn(px + 36, 224, 'Sand', C.sand, 'fire');
+  makeSmallBtn(px + 36, 224, 'Sand', C.sand, 'temple');
   makeSmallBtn(px + 82, 224, 'Earth', C.earth, 'den');
   makeSmallBtn(px + 128, 224, 'Ice', C.ice, 'crypt');
 
@@ -397,7 +397,7 @@ function canPlaceTower(c0, r0, type) {
   // Ensure footprint inside map
   if (c0 < 0 || r0 < 0 || c0 + 1 >= MAP_COLS || r0 + 1 >= ROWS) return false;
   // Must match terrain type for all 4 cells
-  const want = type === 'fire' ? 'sand' : type === 'den' ? 'earth' : 'ice';
+  const want = type === 'temple' ? 'sand' : type === 'den' ? 'earth' : 'ice';
   for (let rr = r0; rr < r0 + 2; rr++) {
     for (let cc = c0; cc < c0 + 2; cc++) {
       if (map[rr][cc] !== want) return false;
@@ -416,7 +416,7 @@ function tryTerraformGroup(c0, r0) {
   if (mana < 25) return;
   if (!canTerraformAt(c0, r0)) return;
   mana -= 25;
-  const targetType = selectedBuild === 'fire' ? 'sand' : selectedBuild === 'den' ? 'earth' : 'ice';
+  const targetType = selectedBuild === 'temple' ? 'sand' : selectedBuild === 'den' ? 'earth' : 'ice';
   map[r0][c0] = targetType;
   coins += 10;
   terraformMode = false;
@@ -645,7 +645,7 @@ function stepTowers(dt) {
     if (inRange.length === 0) continue;
     inRange.sort((a, b) => (a.e.carrying === b.e.carrying ? a.d - b.d : (b.e.carrying ? 1 : -1)));
 
-    if (t.type === 'fire') {
+    if (t.type === 'temple') {
       // Continuous short beam to nearest target every tick (beam applies damage over time)
       const target = inRange[0].e;
       const beam = { x1: t.x, y1: t.y, x2: target.x, y2: target.y, ttl: 0.08, dmg: t.dmg };
@@ -684,7 +684,7 @@ function stepBullets(dt) {
     const step = b.speed * dt;
     if (dist <= step || dist < 8) {
       e.hp -= b.dmg; scoreDamage += b.dmg;
-      if (b.type === 'fire') { e.burn = Math.max(e.burn, b.burnSec); e.burnDps = b.burnDps; }
+      if (b.type === 'temple') { e.burn = Math.max(e.burn, b.burnSec); e.burnDps = b.burnDps; }
       if (b.type === 'crypt') { e.slow = Math.max(e.slow, b.slowSec); e.slowPct = Math.max(e.slowPct, b.slowPct); }
       bullets.splice(i, 1);
     } else {
@@ -760,7 +760,7 @@ function draw() {
   g.lineStyle(2, 0x2a3a4a, 1).strokeRect(MAP_W + 1, 1, PANEL_W - 2, 598);
   // Build/Terraform preview hover
   if (!gameEnded && hoverC >= 0 && hoverR >= 0 && hoverC < MAP_COLS && hoverR < ROWS) {
-    const col = selectedBuild === 'fire' ? C.fire : selectedBuild === 'den' ? C.den : C.crypt;
+    const col = selectedBuild === 'temple' ? C.fire : selectedBuild === 'den' ? C.den : C.crypt;
     if (terraformMode) {
       const ok = canTerraformAt(hoverC, hoverR);
       g.fillStyle(col, ok ? 0.35 : 0.15).fillRect(hoverC * TILE + 1, hoverR * TILE + 1, TILE - 2, TILE - 2);
@@ -835,7 +835,7 @@ function draw() {
     `Safe Gems: ${gemsAtBase}/5\n` +
     `Coins: ${coins}  Mana: ${Math.floor(mana)}\n` +
     `Wave: ${waveText}\n\n` +
-    `Build Fire [1] (${(towersBuiltByType.fire || 0) * 10 + 100} coins)\n` +
+    `Build Temple [1] (${(towersBuiltByType.temple || 0) * 10 + 100} coins)\n` +
     `Build Den [2] (${(towersBuiltByType.den || 0) * 10 + 100} coins)\n` +
     `Build Crypt [3] (${(towersBuiltByType.crypt || 0) * 10 + 100} coins)\n` +
     `Terraform [T] (25 mana)\n` +
@@ -892,7 +892,7 @@ function restart() {
   beams = []; explodeEffects = []; pendingShots = [];
   if (endUI) { endUI.destroy(); endUI = null; }
   paused = false;
-  coins = 330; mana = 50; wave = 0; waveInProgress = false; timeToNextWave = 10; spawnQueue = []; spawnTimer = 0; gemsAtBase = 5; gemsLost = 0; towersBuilt = 0; selectedBuild = 'fire'; gameEnded = false; scoreDamage = 0; touchedGem = false; terraformMode = false; meteorMode = false;
+  coins = 330; mana = 50; wave = 0; waveInProgress = false; timeToNextWave = 10; spawnQueue = []; spawnTimer = 0; gemsAtBase = 5; gemsLost = 0; towersBuilt = 0; selectedBuild = 'temple'; gameEnded = false; scoreDamage = 0; touchedGem = false; terraformMode = false; meteorMode = false;
   towersBuiltByType = { fire: 0, den: 0, crypt: 0 };
   baseGemColors = [GEM_COLORS[0], GEM_COLORS[1], GEM_COLORS[2], GEM_COLORS[3], GEM_COLORS[4]];
   buildMapAndPath();
