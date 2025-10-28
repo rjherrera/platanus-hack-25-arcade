@@ -46,6 +46,8 @@ let hoverR = -1;
 let terraformMode = false;
 let meteorMode = false;
 let endUI = null;
+let paused = false;
+let towersBuiltByType = { fire: 0, den: 0, crypt: 0 };
 const METEOR_COST = 200;
 const METEOR_RADIUS = 96;
 const METEOR_DMG = 150;
@@ -115,15 +117,20 @@ function create() {
 function setupInput(scene) {
   scene.input.keyboard.on('keydown', (e) => {
     if (gameEnded) return;
-    if (e.key === '1') selectedBuild = 'fire';
-    if (e.key === '2') selectedBuild = 'den';
-    if (e.key === '3') selectedBuild = 'crypt';
+    if (e.key === '1') { selectedBuild = 'fire'; terraformMode = false; meteorMode = false; }
+    if (e.key === '2') { selectedBuild = 'den'; terraformMode = false; meteorMode = false; }
+    if (e.key === '3') { selectedBuild = 'crypt'; terraformMode = false; meteorMode = false; }
+    // Terraform per-type hotkeys
+    if (e.key.toLowerCase() === 'q') { selectedBuild = 'fire'; terraformMode = true; meteorMode = false; }
+    if (e.key.toLowerCase() === 'w') { selectedBuild = 'den'; terraformMode = true; meteorMode = false; }
+    if (e.key.toLowerCase() === 'e') { selectedBuild = 'crypt'; terraformMode = true; meteorMode = false; }
     if (e.key === ' ') castFrostNova();
     if (e.key.toLowerCase() === 'n' && !waveInProgress && wave < totalWaves) timeToNextWave = 0;
     if (e.key.toLowerCase() === 't') terraformMode = !terraformMode, meteorMode = false;
     if (e.key.toLowerCase() === 'm') meteorMode = !meteorMode, terraformMode = false;
     if (e.key.toLowerCase() === 'r' && gameEnded) restart();
     if (e.key.toLowerCase() === 'x') sellMode = !sellMode;
+    if (e.key.toLowerCase() === 'p') paused = !paused;
   });
   // Robust hotkeys
   scene.input.keyboard.on('keydown-N', () => {
@@ -135,6 +142,7 @@ function setupInput(scene) {
 
   scene.input.on('pointerdown', (p) => {
     if (gameEnded) return;
+    if (paused) return;
     // If click is in the right UI panel, ignore build handling (buttons handle it)
     if (p.x >= MAP_W) return;
     const cc = Math.floor(p.x / TILE);
@@ -158,10 +166,10 @@ function setupInput(scene) {
       // if no tower under cursor, fall through to build
     }
     if (!canPlaceTower(c, r, selectedBuild)) return;
-    const cost = 100 + towersBuilt * 10;
+    const cost = 100 + (towersBuiltByType[selectedBuild] || 0) * 10;
     if (coins < cost) return;
     coins -= cost;
-    towersBuilt++;
+    towersBuilt++; towersBuiltByType[selectedBuild] = (towersBuiltByType[selectedBuild] || 0) + 1;
     const bp = TOWERS[selectedBuild];
     const pos = { x: (c + 1) * TILE, y: (r + 1) * TILE };
     towers.push({ type: selectedBuild, c, r, w: 2, h: 2, x: pos.x, y: pos.y, cd: 0, ...bp });
@@ -175,10 +183,17 @@ function setupInput(scene) {
 
 function setupUI(scene) {
   const px = MAP_W;
+  // Pause button
+  const pauseRect = scene.add.rectangle(px + PANEL_W / 2, 26, PANEL_W - 20, 30, 0x666666, 0.6).setStrokeStyle(2, 0xffffff, 0.4).setInteractive({ useHandCursor: true });
+  const pauseTxt = scene.add.text(px + PANEL_W / 2, 26, 'Pause', { fontFamily: 'Arial, sans-serif', fontSize: '14px', color: '#ffffff' }).setOrigin(0.5);
+  pauseRect.on('pointerdown', () => {
+    paused = !paused;
+    pauseTxt.setText(paused ? 'Resume' : 'Pause');
+  });
   const makeBtn = (y, label, color, key) => {
     const rect = scene.add.rectangle(px + PANEL_W / 2, y, PANEL_W - 20, 40, color, 0.6).setStrokeStyle(2, 0xffffff, 0.4).setInteractive({ useHandCursor: true });
     const txt = scene.add.text(px + PANEL_W / 2, y, label, { fontFamily: 'Arial, sans-serif', fontSize: '14px', color: '#ffffff' }).setOrigin(0.5);
-    rect.on('pointerdown', () => { selectedBuild = key; });
+    rect.on('pointerdown', () => { selectedBuild = key; terraformMode = false; meteorMode = false; });
     return { rect, txt, key, color };
   };
   uiButtons.fire = makeBtn(70, 'Fire (Sand)', C.fire, 'fire');
@@ -407,6 +422,7 @@ function randomSpawnCell() {
 function update(_, dtMs) {
   const dt = Math.min(1 / 30, dtMs / 1000);
   if (gameEnded) { draw(); return; }
+  if (paused) { draw(); return; }
 
   // Mana regen
   mana = Math.min(manaCap, mana + manaRegen * dt);
@@ -775,16 +791,17 @@ function draw() {
   }
 
   // UI
-  const cost = 100 + towersBuilt * 10;
+  const cost = 100 + (towersBuiltByType[selectedBuild] || 0) * 10;
   const nextReady = !waveInProgress && wave < totalWaves && enemies.length === 0 && spawnQueue.length === 0;
   const waveText = wave >= totalWaves ? `${wave}/${totalWaves}` : `${Math.max(0, wave)}/${totalWaves}${nextReady ? ` (in ${Math.ceil(timeToNextWave)}s)` : ''}`;
   uiText.setText(
-    `Wave ${waveText}\n` +
-    `Gems at Base: ${gemsAtBase}  Lost: ${gemsLost}\n` +
+    `Wave: ${waveText}\n` +
+    `Gems: ${gemsAtBase}  Lost: ${gemsLost}\n` +
     `Coins: ${coins}  Mana: ${Math.floor(mana)}  Score: ${Math.floor(scoreDamage)}\n` +
-    `[T] Terraform (25 mana)  [M] Meteor (200)\n` +
-    `Build: ${selectedBuild.toUpperCase()}  Cost: ${cost}\n` +
-    `Space: Frost Nova (30)  N: Next Wave`
+    `Build [1/2/3]: ${selectedBuild.toUpperCase()}  Cost: ${cost}\n` +
+    `Terraform: T toggle | Q Sand | W Earth | E Ice (25)\n` +
+    `Abilities: Space Frost (30) | M Meteor (200)\n` +
+    `Modes: X Sell/Destroy | N Next | P Pause`
   );
 
   // Button selection outlines
@@ -831,6 +848,8 @@ function restart() {
   map = []; navPath = []; towers = []; enemies = []; bullets = []; gemsOnGround = [];
   beams = []; explodeEffects = []; pendingShots = [];
   if (endUI) { endUI.destroy(); endUI = null; }
+  paused = false;
   coins = 330; mana = 50; wave = 0; waveInProgress = false; timeToNextWave = 10; spawnQueue = []; spawnTimer = 0; gemsAtBase = 5; gemsLost = 0; towersBuilt = 0; selectedBuild = 'fire'; gameEnded = false; scoreDamage = 0; touchedGem = false; terraformMode = false; meteorMode = false;
+  towersBuiltByType = { fire: 0, den: 0, crypt: 0 };
   buildMapAndPath();
 }
