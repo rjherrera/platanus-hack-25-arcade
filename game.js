@@ -83,6 +83,9 @@ const C = {
   text: '#e6f2ff'
 };
 
+// Base gem colors: red, green, blue, yellow, purple
+const GEM_COLORS = [0xff4444, 0x44ff44, 0x4488ff, 0xffff55, 0xaa66ff];
+
 // Enemy blueprints
 const ENEMIES = {
   goblin: { hp: 50, speed: 80, reward: 8 },
@@ -242,19 +245,19 @@ function buildMapAndPath() {
     while (r !== r2) { r += r < r2 ? 1 : -1; setPath(c, r); }
   };
 
-  start = { c: 0, r: 2 };
-  treasure = { c: Math.max(3, MAP_COLS - 3), r: Math.min(ROWS - 4, 14) };
+  start = { c: 0, r: 3 };
+  treasure = { c: Math.max(3, MAP_COLS - 3), r: Math.min(ROWS - 3, 15) };
 
   // Multi-turn path: horizontal and vertical bends
-  carve(start.c, start.r, 8, 2);
-  carve(8, 2, 8, 6);
-  carve(8, 6, 3, 6);
-  carve(3, 6, 3, 11);
-  carve(3, 11, 15, 11);
-  carve(15, 11, 15, 4);
-  carve(15, 4, Math.min(MAP_COLS - 6, 18), 4);
-  carve(Math.min(MAP_COLS - 6, 18), 4, Math.min(MAP_COLS - 6, 18), 14);
-  carve(Math.min(MAP_COLS - 6, 18), 14, treasure.c, treasure.r);
+  carve(start.c, start.r, 8, 3);
+  carve(8, 3, 8, 7);
+  carve(8, 7, 3, 7);
+  carve(3, 7, 3, 12);
+  carve(3, 12, 15, 12);
+  carve(15, 12, 15, 5);
+  carve(15, 5, Math.min(MAP_COLS - 6, 18), 5);
+  carve(Math.min(MAP_COLS - 6, 18), 5, Math.min(MAP_COLS - 6, 18), 15);
+  carve(Math.min(MAP_COLS - 6, 18), 15, treasure.c, treasure.r);
   map[treasure.r][treasure.c] = 'path';
 
   // Place discrete 2x2 buildable clusters (sand/earth/ice)
@@ -759,7 +762,8 @@ function draw() {
   for (let i = 0; i < gemsAtBase; i++) {
     const gx = base.x + 16 + (i % 5) * 10;
     const gy = base.y - 18 - Math.floor(i / 5) * 12;
-    drawGem(gx, gy, 8, 0x66ffe0);
+    const col = GEM_COLORS[i % GEM_COLORS.length];
+    drawGem(gx, gy, 8, col);
   }
 
   // Gems on ground
