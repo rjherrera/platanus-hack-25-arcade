@@ -125,8 +125,14 @@ function setupInput(scene) {
     if (e.key.toLowerCase() === 'w') { selectedBuild = 'den'; terraformMode = true; meteorMode = false; }
     if (e.key.toLowerCase() === 'e') { selectedBuild = 'crypt'; terraformMode = true; meteorMode = false; }
     if (e.key === ' ') castFrostNova();
+    if (e.key.toLowerCase() === 'f') castFrostNova();
     if (e.key.toLowerCase() === 'n' && !waveInProgress && wave < totalWaves) timeToNextWave = 0;
-    if (e.key.toLowerCase() === 't') terraformMode = !terraformMode, meteorMode = false;
+    if (e.key.toLowerCase() === 't') {
+      if (!terraformMode) { terraformMode = true; meteorMode = false; }
+      else {
+        selectedBuild = selectedBuild === 'fire' ? 'den' : selectedBuild === 'den' ? 'crypt' : 'fire';
+      }
+    }
     if (e.key.toLowerCase() === 'm') meteorMode = !meteorMode, terraformMode = false;
     if (e.key.toLowerCase() === 'r' && gameEnded) restart();
     if (e.key.toLowerCase() === 'x') sellMode = !sellMode;
@@ -388,6 +394,7 @@ function tryTerraformGroup(c0, r0) {
   mana -= 25;
   const targetType = selectedBuild === 'fire' ? 'sand' : selectedBuild === 'den' ? 'earth' : 'ice';
   map[r0][c0] = targetType;
+  coins += 10;
   terraformMode = false;
 }
 
@@ -745,9 +752,10 @@ function draw() {
     }
   }
 
-  // Treasure base and gem icons
+  // Treasure base (square) and gem icons
   const base = gridToXY(treasure.c, treasure.r);
-  g.fillStyle(0xffff66, 1).fillCircle(base.x, base.y, 10).lineStyle(2, 0xffdd33).strokeCircle(base.x, base.y, 12);
+  g.fillStyle(0xffcc33, 1).fillRect(base.x - 12, base.y - 12, 24, 24);
+  g.lineStyle(2, 0x996600, 1).strokeRect(base.x - 12, base.y - 12, 24, 24);
   for (let i = 0; i < gemsAtBase; i++) {
     const gx = base.x + 16 + (i % 5) * 10;
     const gy = base.y - 18 - Math.floor(i / 5) * 12;
@@ -799,8 +807,8 @@ function draw() {
     `Gems: ${gemsAtBase}  Lost: ${gemsLost}\n` +
     `Coins: ${coins}  Mana: ${Math.floor(mana)}  Score: ${Math.floor(scoreDamage)}\n` +
     `Build [1/2/3]: ${selectedBuild.toUpperCase()}  Cost: ${cost}\n` +
-    `Terraform: T toggle | Q Sand | W Earth | E Ice (25)\n` +
-    `Abilities: Space Frost (30) | M Meteor (200)\n` +
+    `Terraform: T cycle | Q Sand | W Earth | E Ice (25)\n` +
+    `Abilities: Space/F Frost (30) | M Meteor (200)\n` +
     `Modes: X Sell/Destroy | N Next | P Pause`
   );
 
