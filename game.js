@@ -45,6 +45,7 @@ let hoverC = -1;
 let hoverR = -1;
 let terraformMode = false;
 let meteorMode = false;
+let endUI = null;
 const METEOR_COST = 200;
 const METEOR_RADIUS = 96;
 const METEOR_DMG = 150;
@@ -821,23 +822,29 @@ function drawGem(x, y, s, col) {
 function endGame(won) {
   gameEnded = true;
   const scene = game.scene.scenes[0];
+  if (endUI) { endUI.destroy(); endUI = null; }
+  const container = scene.add.container(0, 0);
   const overlay = scene.add.graphics();
   overlay.fillStyle(0x000000, 0.7).fillRect(0, 0, 800, 600);
+  container.add(overlay);
   const gemsSaved = Math.max(0, 5 - gemsLost);
   const multGems = Math.max(1, gemsSaved);
   const multPerfect = touchedGem ? 1 : 2;
   const finalScore = Math.floor(scoreDamage * multGems * multPerfect);
   const title = won ? 'YOU DEFENDED THE GEMS!' : 'THE GEMS ARE LOST';
   const t = scene.add.text(400, 260, title, { fontFamily: 'Arial, sans-serif', fontSize: '36px', color: '#ffffff' }).setOrigin(0.5);
-  scene.add.text(400, 310, `Base: ${Math.floor(scoreDamage)}  x Gems:${multGems}  x Perfect:${multPerfect}`, { fontFamily: 'Arial, sans-serif', fontSize: '18px', color: '#66ffcc' }).setOrigin(0.5);
-  scene.add.text(400, 350, `Final Score: ${finalScore}`, { fontFamily: 'Arial, sans-serif', fontSize: '28px', color: '#ffff88' }).setOrigin(0.5);
-  scene.add.text(400, 400, 'Press R to Restart', { fontFamily: 'Arial, sans-serif', fontSize: '18px', color: '#ffff88' }).setOrigin(0.5);
+  const line2 = scene.add.text(400, 310, `Base: ${Math.floor(scoreDamage)}  x Gems:${multGems}  x Perfect:${multPerfect}`, { fontFamily: 'Arial, sans-serif', fontSize: '18px', color: '#66ffcc' }).setOrigin(0.5);
+  const line3 = scene.add.text(400, 350, `Final Score: ${finalScore}`, { fontFamily: 'Arial, sans-serif', fontSize: '28px', color: '#ffff88' }).setOrigin(0.5);
+  const line4 = scene.add.text(400, 400, 'Press R to Restart', { fontFamily: 'Arial, sans-serif', fontSize: '18px', color: '#ffff88' }).setOrigin(0.5);
+  container.add([t, line2, line3, line4]);
+  endUI = container;
 }
 
 function restart() {
   // Reset all state
   map = []; navPath = []; towers = []; enemies = []; bullets = []; gemsOnGround = [];
   beams = []; explodeEffects = []; pendingShots = [];
+  if (endUI) { endUI.destroy(); endUI = null; }
   coins = 330; mana = 50; wave = 0; waveInProgress = false; timeToNextWave = 10; spawnQueue = []; spawnTimer = 0; gemsAtBase = 5; gemsLost = 0; towersBuilt = 0; selectedBuild = 'fire'; gameEnded = false; scoreDamage = 0; touchedGem = false; terraformMode = false; meteorMode = false;
   buildMapAndPath();
 }
