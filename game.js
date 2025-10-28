@@ -203,8 +203,8 @@ function setupUI(scene) {
     pauseTxt.setText(paused ? 'Resume' : 'Pause');
   });
   // Towers group outline and label
-  scene.add.rectangle(px + PANEL_W / 2, 120, PANEL_W - 10, 140, 0x000000, 0).setStrokeStyle(2, 0x2a3a4a, 0.8);
-  scene.add.text(px + 12, 52, 'Towers', { fontFamily: 'Arial, sans-serif', fontSize: '12px', color: '#ccccff' });
+  scene.add.rectangle(px + PANEL_W / 2, 120, PANEL_W - 10, 142, 0x000000, 0).setStrokeStyle(2, 0x2a3a4a, 0.8);
+  scene.add.text(px + 12, 54, 'Towers (100 c + 10 each)', { fontFamily: 'Arial, sans-serif', fontSize: '12px', color: '#ccccff' });
 
   const makeBtn = (y, label, color, key) => {
     const rect = scene.add.rectangle(px + PANEL_W / 2, y, PANEL_W - 22, 34, color, 0.6).setStrokeStyle(2, 0xffffff, 0.4).setInteractive({ useHandCursor: true });
@@ -212,22 +212,22 @@ function setupUI(scene) {
     rect.on('pointerdown', () => { selectedBuild = key; terraformMode = false; meteorMode = false; });
     return { rect, txt, key, color };
   };
-  uiButtons.temple = makeBtn(86, 'Temple (Sand)', C.fire, 'temple');
-  uiButtons.den = makeBtn(126, 'Den (Earth)', C.den, 'den');
-  uiButtons.crypt = makeBtn(166, 'Crypt (Ice)', C.crypt, 'crypt');
+  uiButtons.temple = makeBtn(88, 'Temple (Sand)', C.fire, 'temple');
+  uiButtons.den = makeBtn(128, 'Den (Earth)', C.den, 'den');
+  uiButtons.crypt = makeBtn(168, 'Crypt (Ice)', C.crypt, 'crypt');
   // Terraform mode buttons
   // Terraform group outline and label
-  scene.add.rectangle(px + PANEL_W / 2, 220, PANEL_W - 10, 52, 0x000000, 0).setStrokeStyle(2, 0x2a3a4a, 0.8);
-  scene.add.text(px + 12, 196, 'Terraform', { fontFamily: 'Arial, sans-serif', fontSize: '12px', color: '#ccccff' });
+  scene.add.rectangle(px + PANEL_W / 2, 224, PANEL_W - 10, 52, 0x000000, 0).setStrokeStyle(2, 0x2a3a4a, 0.8);
+  scene.add.text(px + 12, 202, 'Terraform (25 m)', { fontFamily: 'Arial, sans-serif', fontSize: '12px', color: '#ccccff' });
   const makeSmallBtn = (x, y, label, color, key) => {
     const rect = scene.add.rectangle(x, y, 44, 24, color, 0.5).setStrokeStyle(1, 0xffffff, 0.6).setInteractive({ useHandCursor: true });
     const txt = scene.add.text(x, y, label, { fontFamily: 'Arial, sans-serif', fontSize: '12px', color: '#ffffff' }).setOrigin(0.5);
     rect.on('pointerdown', () => { selectedBuild = key; terraformMode = true; meteorMode = false; });
     return { rect, txt };
   };
-  makeSmallBtn(px + 36, 224, 'Sand', C.sand, 'temple');
-  makeSmallBtn(px + 82, 224, 'Earth', C.earth, 'den');
-  makeSmallBtn(px + 128, 224, 'Ice', C.ice, 'crypt');
+  makeSmallBtn(px + 36, 230, 'Sand', C.sand, 'temple');
+  makeSmallBtn(px + 82, 230, 'Earth', C.earth, 'den');
+  makeSmallBtn(px + 128, 230, 'Ice', C.ice, 'crypt');
 
   // Speed toggle at bottom
   const speedY = 560;
@@ -833,19 +833,34 @@ function draw() {
   uiText.setText(
     `Score: ${Math.floor(scoreDamage)}\n` +
     `Safe Gems: ${gemsAtBase}/5\n` +
-    `Coins: ${coins}  Mana: ${Math.floor(mana)}\n` +
-    `Wave: ${waveText}\n\n` +
-    `Build Temple [1] (${(towersBuiltByType.temple || 0) * 10 + 100} coins)\n` +
-    `Build Den [2] (${(towersBuiltByType.den || 0) * 10 + 100} coins)\n` +
-    `Build Crypt [3] (${(towersBuiltByType.crypt || 0) * 10 + 100} coins)\n` +
-    `Terraform [T] (25 mana)\n` +
-    `Frost [F] (30 mana)\n` +
-    `Meteor [M] (200 mana)\n` +
-    `Destroy [X] (+50 coins)\n\n` +
+    `Wave: ${waveText}\n` +
+    `Coins (c): ${coins}\n` +
+    `Mana (m): ${Math.floor(mana)}\n\n` +
+    `Build Temple [1] (${(towersBuiltByType.temple || 0) * 10 + 100} c)\n` +
+    `Build Den [2] (${(towersBuiltByType.den || 0) * 10 + 100} c)\n` +
+    `Build Crypt [3] (${(towersBuiltByType.crypt || 0) * 10 + 100} c)\n` +
+    `Terraform [T] (25 m)\n` +
+    `Frost [F] (30 m)\n` +
+    `Meteor [M] (200 m)\n` +
+    `Destroy [X] (+50 c)\n\n` +
     `Next wave [N]\n` +
     `Pause [P]\n` +
     `Toggle speed [Space]\n`
   );
+
+  // Refresh button labels with dynamic prices
+  if (uiButtons.temple && uiButtons.temple.txt) {
+    const pt = 100 + ((towersBuiltByType.temple || 0) * 10);
+    uiButtons.temple.txt.setText(`Temple (${pt} c)`);
+  }
+  if (uiButtons.den && uiButtons.den.txt) {
+    const pd = 100 + ((towersBuiltByType.den || 0) * 10);
+    uiButtons.den.txt.setText(`Den (${pd} c)`);
+  }
+  if (uiButtons.crypt && uiButtons.crypt.txt) {
+    const pc = 100 + ((towersBuiltByType.crypt || 0) * 10);
+    uiButtons.crypt.txt.setText(`Crypt (${pc} c)`);
+  }
 
   // Button selection outlines
   Object.values(uiButtons).forEach(b => {
