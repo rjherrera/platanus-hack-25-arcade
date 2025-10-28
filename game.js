@@ -148,7 +148,7 @@ function setupInput(scene) {
       meteorMode = false;
     }
     if (terraformMode) {
-      if (mana >= 100 && canTerraformAt(cc, rr)) { tryTerraformGroup(cc, rr); return; }
+      if (mana >= 25 && canTerraformAt(cc, rr)) { tryTerraformGroup(cc, rr); return; }
       terraformMode = false;
     }
     // Sell mode: destroy tower on click
@@ -367,26 +367,12 @@ function canPlaceTower(c0, r0, type) {
 }
 
 function tryTerraformGroup(c0, r0) {
-  // Convert the entire connected component of 'blocked' tiles to chosen terrain
-  if (mana < 100) return;
+  // Convert a single tile of 'blocked' to chosen terrain
+  if (mana < 25) return;
   if (!canTerraformAt(c0, r0)) return;
-  mana -= 100;
+  mana -= 25;
   const targetType = selectedBuild === 'fire' ? 'sand' : selectedBuild === 'den' ? 'earth' : 'ice';
-  const q = [{ c: c0, r: r0 }];
-  const seen = new Set();
-  const key = (c, r) => c + ',' + r;
-  const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
-  while (q.length) {
-    const { c, r } = q.shift();
-    const k = key(c, r);
-    if (seen.has(k)) continue;
-    seen.add(k);
-    if (!inside(c, r)) continue;
-    if (c >= MAP_COLS) continue; // keep within build area
-    if (map[r][c] !== 'blocked') continue;
-    map[r][c] = targetType;
-    for (let d of dirs) q.push({ c: c + d[0], r: r + d[1] });
-  }
+  map[r0][c0] = targetType;
   terraformMode = false;
 }
 
@@ -796,7 +782,7 @@ function draw() {
     `Wave ${waveText}\n` +
     `Gems at Base: ${gemsAtBase}  Lost: ${gemsLost}\n` +
     `Coins: ${coins}  Mana: ${Math.floor(mana)}  Score: ${Math.floor(scoreDamage)}\n` +
-    `[T] Terraform (100 mana)  [M] Meteor (200)\n` +
+    `[T] Terraform (25 mana)  [M] Meteor (200)\n` +
     `Build: ${selectedBuild.toUpperCase()}  Cost: ${cost}\n` +
     `Space: Frost Nova (30)  N: Next Wave`
   );
