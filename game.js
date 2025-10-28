@@ -1,358 +1,790 @@
-// Platanus Hack 25: Snake Game
-// Navigate the snake around the "PLATANUS HACK ARCADE" title made of blocks!
+// Platanus Hack 25: Cursed Treasure (Arcade TD)
+// Build fire/den/crypt towers on sand/earth/ice. Defend 5 gems across 10 waves.
 
 const config = {
   type: Phaser.AUTO,
   width: 800,
   height: 600,
-  backgroundColor: '#000000',
-  scene: {
-    create: create,
-    update: update
-  }
+  backgroundColor: '#0b0f12',
+  scene: { create, update }
 };
 
 const game = new Phaser.Game(config);
 
-// Game variables
-let snake = [];
-let snakeSize = 15;
-let direction = { x: 1, y: 0 };
-let nextDirection = { x: 1, y: 0 };
-let food;
-let score = 0;
-let scoreText;
-let titleBlocks = [];
-let gameOver = false;
-let moveTimer = 0;
-let moveDelay = 150;
-let graphics;
+// World/grid
+const TILE = 32;
+const PANEL_W = 160;
+const MAP_W = 800 - PANEL_W;
+const COLS = Math.floor(800 / TILE);
+const MAP_COLS = Math.floor(MAP_W / TILE);
+const ROWS = Math.floor(600 / TILE);
+const PATH_RADIUS = 1; // path width = 2*radius+1 tiles
 
-// Pixel font patterns (5x5 grid for each letter)
-const letters = {
-  P: [[1,1,1,1],[1,0,0,1],[1,1,1,1],[1,0,0,0],[1,0,0,0]],
-  L: [[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]],
-  A: [[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],
-  T: [[1,1,1,1],[0,1,0,0],[0,1,0,0],[0,1,0,0],[0,1,0,0]],
-  N: [[1,0,0,1],[1,1,0,1],[1,0,1,1],[1,0,0,1],[1,0,0,1]],
-  U: [[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,1]],
-  S: [[0,1,1,1],[1,0,0,0],[0,1,1,0],[0,0,0,1],[1,1,1,0]],
-  H: [[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],
-  C: [[0,1,1,1],[1,0,0,0],[1,0,0,0],[1,0,0,0],[0,1,1,1]],
-  K: [[1,0,0,1],[1,0,1,0],[1,1,0,0],[1,0,1,0],[1,0,0,1]],
-  '2': [[1,1,1,0],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],
-  '5': [[1,1,1,1],[1,0,0,0],[1,1,1,0],[0,0,0,1],[1,1,1,0]],
-  ':': [[0,0,0,0],[0,1,0,0],[0,0,0,0],[0,1,0,0],[0,0,0,0]],
-  R: [[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,1,0],[1,0,0,1]],
-  D: [[1,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,0]],
-  E: [[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,1,1,1]]
+// State
+let g;
+let uiText;
+let sceneRef;
+let map = [];
+let navPath = [];
+let towers = [];
+let enemies = [];
+let bullets = [];
+let gemsOnGround = [];
+let gemsLost = 0;
+let beams = [];
+let scoreDamage = 0;
+let touchedGem = false;
+let explodeEffects = [];
+let pendingShots = [];
+let start;
+let treasure;
+let uiButtons = {};
+let countdownText;
+let hoverC = -1;
+let hoverR = -1;
+let terraformMode = false;
+let meteorMode = false;
+const METEOR_COST = 200;
+const METEOR_RADIUS = 96;
+const METEOR_DMG = 150;
+
+let coins = 330;
+let mana = 50;
+let manaCap = 150;
+let manaRegen = 1; // per second
+let totalWaves = 10;
+let wave = 0;
+let waveInProgress = false;
+let timeToNextWave = 10;
+let spawnQueue = [];
+let spawnTimer = 0;
+let gemsAtBase = 5;
+let towersBuilt = 0;
+let selectedBuild = 'fire'; // 'fire' (sand), 'den' (earth), 'crypt' (ice)
+let gameEnded = false;
+
+// Colors
+const C = {
+  path: 0x48525a,
+  sand: 0xe2c572,
+  earth: 0x886644,
+  ice: 0x59c4e6,
+  blocked: 0x17301e,
+  fire: 0xff5733,
+  den: 0x8aff6a,
+  crypt: 0xb08cff,
+  enemy: 0xf5f5f5,
+  hpBack: 0x222222,
+  hpFront: 0x00ff66,
+  text: '#e6f2ff'
 };
 
-// Bold font for ARCADE (filled/solid style)
-const boldLetters = {
-  A: [[1,1,1,1,1],[1,1,0,1,1],[1,1,1,1,1],[1,1,0,1,1],[1,1,0,1,1]],
-  R: [[1,1,1,1,0],[1,1,0,1,1],[1,1,1,1,0],[1,1,0,1,1],[1,1,0,1,1]],
-  C: [[1,1,1,1,1],[1,1,0,0,0],[1,1,0,0,0],[1,1,0,0,0],[1,1,1,1,1]],
-  D: [[1,1,1,1,0],[1,1,0,1,1],[1,1,0,1,1],[1,1,0,1,1],[1,1,1,1,0]],
-  E: [[1,1,1,1,1],[1,1,0,0,0],[1,1,1,1,0],[1,1,0,0,0],[1,1,1,1,1]]
+// Enemy blueprints
+const ENEMIES = {
+  goblin: { hp: 40, speed: 80, reward: 8 },
+  orc: { hp: 120, speed: 60, reward: 15 },
+  troll: { hp: 320, speed: 40, reward: 35 }
 };
+
+// Tower blueprints
+const TOWERS = {
+  // Fire: frequent, low-damage continuous beams (nerfed)
+  fire: { range: 90, rate: 0.08, dmg: 2, bullet: 240, burnDps: 6, burnSec: 3, color: C.fire },
+  // Den: slower rate, higher damage per shot
+  den: { range: 120, rate: 0.5, dmg: 14, bullet: 320, color: C.den },
+  // Crypt: burst of 3 sequential shots with slow
+  crypt: { range: 120, rate: 1.2, dmg: 18, bullet: 200, slowPct: 0.45, slowSec: 2.2, color: C.crypt }
+};
+
+// Path helpers
+function gridToXY(c, r) { return { x: c * TILE + TILE / 2, y: r * TILE + TILE / 2 }; }
 
 function create() {
-  const scene = this;
-  graphics = this.add.graphics();
+  sceneRef = this;
+  g = this.add.graphics();
+  uiText = this.add.text(MAP_W + 10, 280, '', { fontFamily: 'Arial, sans-serif', fontSize: '14px', color: C.text, wordWrap: { width: PANEL_W - 20 } });
 
-  // Build "PLATANUS HACK ARCADE" in cyan - centered and grid-aligned
-  // PLATANUS: 8 letters × (4 cols + 1 spacing) = 40 blocks, but last letter no spacing = 39 blocks × 15px = 585px
-  let x = Math.floor((800 - 585) / 2 / snakeSize) * snakeSize;
-  let y = Math.floor(180 / snakeSize) * snakeSize;
-  'PLATANUS'.split('').forEach(char => {
-    x = drawLetter(char, x, y, 0x00ffff);
+  buildMapAndPath();
+  setupInput(this);
+  setupUI(this);
+  countdownText = this.add.text(MAP_W + PANEL_W / 2, 160, '', { fontFamily: 'Arial, sans-serif', fontSize: '18px', color: '#ffff88' }).setOrigin(0.5);
+}
+
+function setupInput(scene) {
+  scene.input.keyboard.on('keydown', (e) => {
+    if (gameEnded) return;
+    if (e.key === '1') selectedBuild = 'fire';
+    if (e.key === '2') selectedBuild = 'den';
+    if (e.key === '3') selectedBuild = 'crypt';
+    if (e.key === ' ') castFrostNova();
+    if (e.key.toLowerCase() === 'n' && !waveInProgress && wave < totalWaves) timeToNextWave = 0;
+    if (e.key.toLowerCase() === 't') terraformMode = !terraformMode, meteorMode = false;
+    if (e.key.toLowerCase() === 'm') meteorMode = !meteorMode, terraformMode = false;
+    if (e.key.toLowerCase() === 'r' && gameEnded) restart();
+  });
+  // Robust hotkeys
+  scene.input.keyboard.on('keydown-N', () => {
+    if (!waveInProgress && wave < totalWaves) timeToNextWave = 0;
+  });
+  scene.input.keyboard.on('keydown-R', () => {
+    if (gameEnded) restart();
   });
 
-  // HACK: 4 letters × (4 cols + 1 spacing) = 20 blocks, but last letter no spacing = 19 blocks × 15px = 285px
-  x = Math.floor((800 - 285) / 2 / snakeSize) * snakeSize;
-  y = Math.floor(280 / snakeSize) * snakeSize;
-  'HACK'.split('').forEach(char => {
-    x = drawLetter(char, x, y, 0x00ffff);
-  });
-
-  // ARCADE: 6 letters × (5 cols + 1 spacing) = 36 blocks, but last letter no spacing = 35 blocks × 15px = 525px
-  x = Math.floor((800 - 525) / 2 / snakeSize) * snakeSize;
-  y = Math.floor(380 / snakeSize) * snakeSize;
-  'ARCADE'.split('').forEach(char => {
-    x = drawLetter(char, x, y, 0xff00ff, true);
-  });
-
-  // Score display
-  scoreText = this.add.text(16, 16, 'Score: 0', {
-    fontSize: '24px',
-    fontFamily: 'Arial, sans-serif',
-    color: '#00ff00'
-  });
-
-  // Instructions
-  this.add.text(400, 560, 'Arrow Keys | Avoid Walls, Yourself & The Title!', {
-    fontSize: '16px',
-    fontFamily: 'Arial, sans-serif',
-    color: '#888888',
-    align: 'center'
-  }).setOrigin(0.5);
-
-  // Initialize snake (start top left)
-  snake = [
-    { x: 75, y: 60 },
-    { x: 60, y: 60 },
-    { x: 45, y: 60 }
-  ];
-
-  // Spawn initial food
-  spawnFood();
-
-  // Keyboard input
-  this.input.keyboard.on('keydown', (event) => {
-    if (gameOver && event.key === 'r') {
-      restartGame(scene);
+  scene.input.on('pointerdown', (p) => {
+    if (gameEnded) return;
+    // If click is in the right UI panel, ignore build handling (buttons handle it)
+    if (p.x >= MAP_W) return;
+    let c = Math.floor(p.x / TILE);
+    let r = Math.floor(p.y / TILE);
+    if (!inside(c, r)) return;
+    c = Math.min(c, MAP_COLS - 2);
+    r = Math.min(r, ROWS - 2);
+    if (terraformMode) {
+      tryTerraform(c, r);
       return;
     }
-
-    if (event.key === 'ArrowUp' && direction.y === 0) {
-      nextDirection = { x: 0, y: -1 };
-    } else if (event.key === 'ArrowDown' && direction.y === 0) {
-      nextDirection = { x: 0, y: 1 };
-    } else if (event.key === 'ArrowLeft' && direction.x === 0) {
-      nextDirection = { x: -1, y: 0 };
-    } else if (event.key === 'ArrowRight' && direction.x === 0) {
-      nextDirection = { x: 1, y: 0 };
+    if (meteorMode) {
+      tryMeteor(p.x, p.y);
+      return;
     }
+    if (!canPlaceTower(c, r, selectedBuild)) return;
+    const cost = 100 + towersBuilt * 10;
+    if (coins < cost) return;
+    coins -= cost;
+    towersBuilt++;
+    const bp = TOWERS[selectedBuild];
+    const pos = { x: (c + 1) * TILE, y: (r + 1) * TILE };
+    towers.push({ type: selectedBuild, c, r, w: 2, h: 2, x: pos.x, y: pos.y, cd: 0, ...bp });
   });
-
-  playTone(this, 440, 0.1);
+  scene.input.on('pointermove', (p) => {
+    if (p.x >= MAP_W) { hoverC = hoverR = -1; return; }
+    hoverC = Math.floor(p.x / TILE);
+    hoverR = Math.floor(p.y / TILE);
+  });
 }
 
-function drawLetter(char, startX, startY, color, useBold = false) {
-  const pattern = useBold ? boldLetters[char] : letters[char];
-  if (!pattern) return startX + 30;
+function setupUI(scene) {
+  const px = MAP_W;
+  const makeBtn = (y, label, color, key) => {
+    const rect = scene.add.rectangle(px + PANEL_W / 2, y, PANEL_W - 20, 40, color, 0.6).setStrokeStyle(2, 0xffffff, 0.4).setInteractive({ useHandCursor: true });
+    const txt = scene.add.text(px + PANEL_W / 2, y, label, { fontFamily: 'Arial, sans-serif', fontSize: '14px', color: '#ffffff' }).setOrigin(0.5);
+    rect.on('pointerdown', () => { selectedBuild = key; });
+    return { rect, txt, key, color };
+  };
+  uiButtons.fire = makeBtn(70, 'Fire (Sand)', C.fire, 'fire');
+  uiButtons.den = makeBtn(120, 'Den (Earth)', C.den, 'den');
+  uiButtons.crypt = makeBtn(170, 'Crypt (Ice)', C.crypt, 'crypt');
+  // Terraform mode buttons
+  const makeSmallBtn = (x, y, label, color, key) => {
+    const rect = scene.add.rectangle(x, y, 44, 24, color, 0.5).setStrokeStyle(1, 0xffffff, 0.6).setInteractive({ useHandCursor: true });
+    const txt = scene.add.text(x, y, label, { fontFamily: 'Arial, sans-serif', fontSize: '12px', color: '#ffffff' }).setOrigin(0.5);
+    rect.on('pointerdown', () => { selectedBuild = key; terraformMode = true; meteorMode = false; });
+    return { rect, txt };
+  };
+  makeSmallBtn(px + 40, 210, 'Sand', C.sand, 'fire');
+  makeSmallBtn(px + 80, 210, 'Earth', C.earth, 'den');
+  makeSmallBtn(px + 120, 210, 'Ice', C.ice, 'crypt');
+}
 
-  for (let row = 0; row < pattern.length; row++) {
-    for (let col = 0; col < pattern[row].length; col++) {
-      if (pattern[row][col]) {
-        const blockX = startX + col * snakeSize;
-        const blockY = startY + row * snakeSize;
-        titleBlocks.push({ x: blockX, y: blockY, color: color });
+function buildMapAndPath() {
+  map = [];
+  for (let r = 0; r < ROWS; r++) {
+    const row = [];
+    for (let c = 0; c < COLS; c++) row.push('blocked');
+    map.push(row);
+  }
+  // Carve a 2D corridor within the left 640px (MAP_W)
+  const setPath = (cc, rr) => {
+    for (let dr = -PATH_RADIUS; dr <= PATH_RADIUS; dr++) {
+      for (let dc = -PATH_RADIUS; dc <= PATH_RADIUS; dc++) {
+        const rc = rr + dr, cc2 = cc + dc;
+        if (!inside(cc2, rc)) continue;
+        if (cc2 >= MAP_COLS) continue;
+        map[rc][cc2] = 'path';
       }
     }
-  }
-  return startX + (pattern[0].length + 1) * snakeSize;
-}
-
-function update(_time, delta) {
-  if (gameOver) return;
-
-  moveTimer += delta;
-  if (moveTimer >= moveDelay) {
-    moveTimer = 0;
-    direction = nextDirection;
-    moveSnake(this);
-  }
-
-  drawGame();
-}
-
-function moveSnake(scene) {
-  const head = snake[0];
-  const newHead = {
-    x: head.x + direction.x * snakeSize,
-    y: head.y + direction.y * snakeSize
+  };
+  const carve = (c1, r1, c2, r2) => {
+    let c = c1, r = r1;
+    setPath(c, r);
+    while (c !== c2) { c += c < c2 ? 1 : -1; setPath(c, r); }
+    while (r !== r2) { r += r < r2 ? 1 : -1; setPath(c, r); }
   };
 
-  // Check wall collision
-  if (newHead.x < 0 || newHead.x >= 800 || newHead.y < 0 || newHead.y >= 600) {
-    endGame(scene);
-    return;
-  }
+  start = { c: 0, r: 2 };
+  treasure = { c: Math.max(3, MAP_COLS - 3), r: Math.min(ROWS - 4, 14) };
 
-  // Check self collision
-  for (let segment of snake) {
-    if (segment.x === newHead.x && segment.y === newHead.y) {
-      endGame(scene);
-      return;
+  // Multi-turn path: horizontal and vertical bends
+  carve(start.c, start.r, 8, 2);
+  carve(8, 2, 8, 6);
+  carve(8, 6, 3, 6);
+  carve(3, 6, 3, 11);
+  carve(3, 11, 15, 11);
+  carve(15, 11, 15, 4);
+  carve(15, 4, Math.min(MAP_COLS - 6, 18), 4);
+  carve(Math.min(MAP_COLS - 6, 18), 4, Math.min(MAP_COLS - 6, 18), 14);
+  carve(Math.min(MAP_COLS - 6, 18), 14, treasure.c, treasure.r);
+  map[treasure.r][treasure.c] = 'path';
+
+  // Place discrete 2x2 buildable clusters (sand/earth/ice)
+  placeBuildClusters();
+
+  // Compute navigable path from start to treasure along 'path' tiles
+  navPath = computeNavPath(start, treasure).map(p => gridToXY(p.c, p.r));
+}
+
+function computeNavPath(src, dst) {
+  const q = [];
+  const visited = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+  const parent = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+  q.push(src);
+  visited[src.r][src.c] = true;
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+  while (q.length) {
+    const cur = q.shift();
+    if (cur.c === dst.c && cur.r === dst.r) break;
+    for (let d of dirs) {
+      const nc = cur.c + d[0];
+      const nr = cur.r + d[1];
+      if (!inside(nc, nr)) continue;
+      if (visited[nr][nc]) continue;
+      if (map[nr][nc] !== 'path') continue;
+      visited[nr][nc] = true;
+      parent[nr][nc] = cur;
+      q.push({ c: nc, r: nr });
+    }
+  }
+  const out = [];
+  let p = dst;
+  while (p) {
+    out.push(p);
+    p = parent[p.r][p.c];
+  }
+  out.reverse();
+  return out;
+}
+
+function nearestNavIndex(x, y) {
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < navPath.length; i++) {
+    const p = navPath[i];
+    const dx = p.x - x, dy = p.y - y;
+    const d = dx * dx + dy * dy;
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+
+function placeBuildClusters() {
+  const types = ['sand', 'earth', 'ice'];
+  const clustersByType = { sand: [], earth: [], ice: [] };
+  const maxTries = 150;
+  let placed = 0;
+  for (let t = 0; t < maxTries; t++) {
+    const type = types[Math.floor(Math.random() * types.length)];
+    const c0 = Math.floor(Math.random() * (MAP_COLS - 1));
+    const r0 = Math.floor(Math.random() * (ROWS - 1));
+    if (!canPlaceClusterAt(c0, r0, type, clustersByType)) continue;
+    // Paint 2x2 cluster
+    for (let r = r0; r < r0 + 2; r++) {
+      for (let c = c0; c < c0 + 2; c++) {
+        map[r][c] = type;
+      }
+    }
+    clustersByType[type].push({ c: c0, r: r0 });
+    placed++;
+    if (placed > 28) break; // keep density moderate
+  }
+}
+
+function canPlaceClusterAt(c0, r0, type, clustersByType) {
+  // inside map area for 2x2
+  if (c0 < 0 || r0 < 0 || c0 + 1 >= MAP_COLS || r0 + 1 >= ROWS) return false;
+  // must be on blocked and not on path
+  for (let r = r0; r < r0 + 2; r++) {
+    for (let c = c0; c < c0 + 2; c++) {
+      if (map[r][c] !== 'blocked') return false;
+    }
+  }
+  // avoid creating very large fields: limit adjacency of same-type clusters
+  const neighbors = clustersByType[type];
+  let adjacentCount = 0;
+  for (let n of neighbors) {
+    const touchH = (n.r === r0 && Math.abs(n.c - c0) === 2);
+    const touchV = (n.c === c0 && Math.abs(n.r - r0) === 2);
+    if (touchH || touchV) adjacentCount++;
+    if (adjacentCount > 1) return false; // allow up to 2 groups in a row
+  }
+  return true;
+}
+
+function canPlaceTower(c0, r0, type) {
+  // Ensure footprint inside map
+  if (c0 < 0 || r0 < 0 || c0 + 1 >= MAP_COLS || r0 + 1 >= ROWS) return false;
+  // Must match terrain type for all 4 cells
+  const want = type === 'fire' ? 'sand' : type === 'den' ? 'earth' : 'ice';
+  for (let rr = r0; rr < r0 + 2; rr++) {
+    for (let cc = c0; cc < c0 + 2; cc++) {
+      if (map[rr][cc] !== want) return false;
+    }
+  }
+  // No overlap with other towers
+  for (let t of towers) {
+    const overlap = !(c0 + 1 < t.c || c0 > t.c + (t.w || 2) - 1 || r0 + 1 < t.r || r0 > t.r + (t.h || 2) - 1);
+    if (overlap) return false;
+  }
+  return true;
+}
+
+function tryTerraform(c0, r0) {
+  // Convert 2x2 of blocked (non-path) to chosen terrain using 100 mana
+  if (mana < 100) return;
+  if (!canTerraformPreview(c0, r0)) return;
+  mana -= 100;
+  const targetType = selectedBuild === 'fire' ? 'sand' : selectedBuild === 'den' ? 'earth' : 'ice';
+  for (let r = r0; r < r0 + 2; r++) {
+    for (let c = c0; c < c0 + 2; c++) {
+      map[r][c] = targetType;
+    }
+  }
+}
+
+function canTerraformPreview(c0, r0) {
+  for (let r = r0; r < r0 + 2; r++) {
+    for (let c = c0; c < c0 + 2; c++) {
+      if (!inside(c, r)) return false;
+      if (map[r][c] === 'path') return false;
+    }
+  }
+  return true;
+}
+
+function tryMeteor(px, py) {
+  if (mana < METEOR_COST) return;
+  mana -= METEOR_COST;
+  explodeEffects.push({ x: px, y: py, r: METEOR_RADIUS, ttl: 0.35 });
+  for (let e of enemies) {
+    const d = Math.hypot(e.x - px, e.y - py);
+    if (d <= METEOR_RADIUS) {
+      e.hp -= METEOR_DMG;
+      scoreDamage += METEOR_DMG;
+    }
+  }
+}
+
+function randomSpawnCell() {
+  const cells = [];
+  for (let rr = start.r - PATH_RADIUS; rr <= start.r + PATH_RADIUS; rr++) {
+    for (let cc = start.c; cc <= start.c + PATH_RADIUS; cc++) {
+      if (inside(cc, rr) && map[rr][cc] === 'path') cells.push({ c: cc, r: rr });
+    }
+  }
+  if (!cells.length) return start;
+  return cells[Math.floor(Math.random() * cells.length)];
+}
+
+function update(_, dtMs) {
+  const dt = Math.min(1 / 30, dtMs / 1000);
+  if (gameEnded) { draw(); return; }
+
+  // Mana regen
+  mana = Math.min(manaCap, mana + manaRegen * dt);
+
+  // Waves
+  if (!waveInProgress && wave < totalWaves) {
+    if (enemies.length === 0 && spawnQueue.length === 0) {
+      timeToNextWave -= dt;
+      if (timeToNextWave <= 0) { startWave(); timeToNextWave = 20; }
+    } else {
+      // Keep countdown visible but not decreasing while wave active
+    }
+  }
+  if (spawnQueue.length) {
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) {
+      const t = spawnQueue.shift();
+      spawnEnemy(t);
+      spawnTimer = 0.6; // spacing
     }
   }
 
-  // Check title block collision
-  for (let block of titleBlocks) {
-    if (newHead.x === block.x && newHead.y === block.y) {
-      endGame(scene);
-      return;
-    }
-  }
+  // Systems
+  stepEnemies(dt);
+  stepGems(dt);
+  stepTowers(dt);
+  stepPendingShots(dt);
+  stepBullets(dt);
+  stepBeams(dt);
+  stepExplosions(dt);
 
-  snake.unshift(newHead);
+  // Win/Lose
+  if (gemsLost >= 5 && !gameEnded) endGame(false);
+  if (wave === totalWaves && !waveInProgress && enemies.length === 0 && gemsOnGround.length === 0 && !gameEnded) endGame(true);
 
-  // Check food collision
-  if (newHead.x === food.x && newHead.y === food.y) {
-    score += 10;
-    scoreText.setText('Score: ' + score);
-    spawnFood();
-    playTone(scene, 880, 0.1);
+  draw();
+}
 
-    if (moveDelay > 80) {
-      moveDelay -= 2;
+function startWave() {
+  wave++;
+  waveInProgress = true;
+  const comp = waveComposition(wave);
+  spawnQueue = comp.slice();
+}
+
+function waveComposition(n) {
+  const arr = [];
+  const g = 6 + Math.floor(n * 1.5);
+  const o = Math.floor(n / 2);
+  const t = Math.floor((n - 3) / 3);
+  for (let i = 0; i < g; i++) arr.push('goblin');
+  for (let i = 0; i < o; i++) arr.push('orc');
+  for (let i = 0; i < t; i++) arr.push('troll');
+  return arr;
+}
+
+function spawnEnemy(kind) {
+  const src = randomSpawnCell();
+  const pathCells = computeNavPath(src, treasure);
+  const pathPts = pathCells.map(p => gridToXY(p.c, p.r));
+  const p0 = pathPts[0];
+  const bp = ENEMIES[kind];
+  const hpScale = 1 + Math.max(0, wave - 1) * 0.18;
+  enemies.push({
+    kind,
+    x: p0.x,
+    y: p0.y,
+    hp: Math.floor(bp.hp * hpScale),
+    maxHp: Math.floor(bp.hp * hpScale),
+    baseSpeed: bp.speed,
+    speed: bp.speed,
+    reward: bp.reward,
+    idx: 0,
+    dir: +1, // towards treasure first
+    pathPts,
+    carrying: false,
+    burn: 0,
+    burnDps: 0,
+    slow: 0,
+    slowPct: 0
+  });
+  if (!spawnQueue.length) waveInProgress = false;
+}
+
+function stepEnemies(dt) {
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    // DoT and slow timers
+    if (e.burn > 0) { const d = Math.min(e.burn, dt); e.hp -= e.burnDps * d; e.burn -= d; }
+    if (e.slow > 0) { e.slow -= dt; if (e.slow <= 0) { e.slow = 0; e.slowPct = 0; } }
+    const speed = e.baseSpeed * (1 - e.slowPct);
+
+    // Move along path
+    const pathPts = e.pathPts || navPath;
+    const tgtIdx = Phaser.Math.Clamp(e.idx + e.dir, 0, pathPts.length - 1);
+    const tgt = pathPts[tgtIdx] || pathPts[0];
+    const dx = tgt.x - e.x, dy = tgt.y - e.y;
+    const dist = Math.hypot(dx, dy);
+    const step = speed * dt;
+    if (dist <= step) {
+      e.x = tgt.x; e.y = tgt.y; e.idx = tgtIdx;
+      // Reached treasure?
+      if (e.dir === +1 && nearTreasure(e) && !e.carrying && gemsAtBase > 0) {
+        e.carrying = true;
+        gemsAtBase -= 1;
+        touchedGem = true;
+        e.dir = -1;
+      } else if (e.dir === -1 && e.idx === 0) {
+        // Exited map
+        if (e.carrying) { gemsLost += 1; }
+        enemies.splice(i, 1);
+        continue;
     }
   } else {
-    snake.pop();
-  }
-}
-
-function spawnFood() {
-  let valid = false;
-  let attempts = 0;
-
-  while (!valid && attempts < 100) {
-    attempts++;
-    const gridX = Math.floor(Math.random() * 53) * snakeSize;
-    const gridY = Math.floor(Math.random() * 40) * snakeSize;
-
-    // Check not on snake
-    let onSnake = false;
-    for (let segment of snake) {
-      if (segment.x === gridX && segment.y === gridY) {
-        onSnake = true;
-        break;
-      }
+      e.x += (dx / dist) * step;
+      e.y += (dy / dist) * step;
     }
 
-    // Check not on title blocks
-    let onTitle = false;
-    for (let block of titleBlocks) {
-      if (gridX === block.x && gridY === block.y) {
-        onTitle = true;
-        break;
-      }
-    }
-
-    if (!onSnake && !onTitle) {
-      food = { x: gridX, y: gridY };
-      valid = true;
+    // Death check
+    if (e.hp <= 0) {
+      coins += e.reward;
+      if (e.carrying) dropGem(e.x, e.y);
+      enemies.splice(i, 1);
     }
   }
 }
 
-function drawGame() {
-  graphics.clear();
+function nearTreasure(e) {
+  const p = gridToXY(treasure.c, treasure.r);
+  return Math.hypot(e.x - p.x, e.y - p.y) < TILE * 0.6;
+}
 
-  // Draw title blocks
-  titleBlocks.forEach(block => {
-    graphics.fillStyle(block.color, 1);
-    graphics.fillRect(block.x, block.y, snakeSize - 2, snakeSize - 2);
-  });
+function dropGem(x, y) {
+  gemsOnGround.push({ x, y, vx: 0, vy: 0, returnDelay: 4 });
+}
 
-  // Draw snake
-  snake.forEach((segment, index) => {
-    if (index === 0) {
-      graphics.fillStyle(0x00ff00, 1);
+function stepGems(dt) {
+  for (let i = gemsOnGround.length - 1; i >= 0; i--) {
+    const gobj = gemsOnGround[i];
+    gobj.returnDelay -= dt;
+    if (gobj.returnDelay <= 0) {
+      if (gobj.idx == null) gobj.idx = nearestNavIndex(gobj.x, gobj.y);
+      const targetIdx = navPath.length - 1;
+      const nextIdx = Math.min(targetIdx, gobj.idx + 1);
+      const tgt = navPath[nextIdx];
+      const dx = tgt.x - gobj.x, dy = tgt.y - gobj.y;
+      const dist = Math.hypot(dx, dy);
+      const step = 35 * dt; // slower return speed
+      if (dist <= step) {
+        gobj.x = tgt.x; gobj.y = tgt.y; gobj.idx = nextIdx;
+        if (gobj.idx >= targetIdx) { gemsOnGround.splice(i, 1); gemsAtBase += 1; continue; }
+      } else {
+        gobj.x += (dx / dist) * step;
+        gobj.y += (dy / dist) * step;
+      }
+    }
+    // Enemy pickup while on ground/returning
+    for (let e of enemies) {
+      if (!e.carrying && Math.hypot(e.x - gobj.x, e.y - gobj.y) < 14) {
+        e.carrying = true;
+        gemsOnGround.splice(i, 1);
+        break;
+      }
+    }
+  }
+}
+
+function stepTowers(dt) {
+  for (let t of towers) {
+    t.cd -= dt;
+    if (t.cd > 0) continue;
+    // Find targets in range
+    const inRange = [];
+    for (let e of enemies) {
+      const d = Math.hypot(e.x - t.x, e.y - t.y);
+      if (d <= t.range) inRange.push({ e, d });
+    }
+    if (inRange.length === 0) continue;
+    inRange.sort((a, b) => (a.e.carrying === b.e.carrying ? a.d - b.d : (b.e.carrying ? 1 : -1)));
+
+    if (t.type === 'fire') {
+      // Continuous short beam to nearest target every tick (beam applies damage over time)
+      const target = inRange[0].e;
+      const beam = { x1: t.x, y1: t.y, x2: target.x, y2: target.y, ttl: 0.08, dmg: t.dmg };
+      beams.push(beam);
+    } else if (t.type === 'crypt') {
+      // Three sequential shots (staggered)
+      const shots = Math.min(3, inRange.length);
+      for (let i = 0; i < shots; i++) {
+        const target = inRange[i].e;
+        pendingShots.push({ delay: 0.12 * i, make: () => {
+          const b = { x: t.x, y: t.y, tx: target, speed: t.bullet, dmg: Math.ceil(t.dmg * 0.5), type: t.type, burnDps: 0, burnSec: 0, slowPct: t.slowPct || 0, slowSec: t.slowSec || 0, color: t.color };
+          bullets.push(b);
+        }});
+      }
     } else {
-      graphics.fillStyle(0x00aa00, 1);
+      // Den: slower, heavier shot
+      const target = inRange[0].e;
+      const b = { x: t.x, y: t.y, tx: target, speed: t.bullet, dmg: Math.ceil(t.dmg * 1.6), type: t.type, burnDps: 0, burnSec: 0, slowPct: 0, slowSec: 0, color: t.color };
+      bullets.push(b);
     }
-    graphics.fillRect(segment.x, segment.y, snakeSize - 2, snakeSize - 2);
-  });
-
-  // Draw food
-  graphics.fillStyle(0xff0000, 1);
-  graphics.fillRect(food.x, food.y, snakeSize - 2, snakeSize - 2);
+    t.cd = t.rate;
+  }
 }
 
-function endGame(scene) {
-  gameOver = true;
-  playTone(scene, 220, 0.5);
+function shoot(t, e) {
+  const b = { x: t.x, y: t.y, tx: e, speed: t.bullet, dmg: t.dmg, type: t.type, burnDps: t.burnDps || 0, burnSec: t.burnSec || 0, slowPct: t.slowPct || 0, slowSec: t.slowSec || 0, color: t.color };
+  bullets.push(b);
+}
 
-  // Semi-transparent overlay
+function stepBullets(dt) {
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    const e = b.tx;
+    if (!e) { bullets.splice(i, 1); continue; }
+    const dx = e.x - b.x, dy = e.y - b.y, dist = Math.hypot(dx, dy);
+    const step = b.speed * dt;
+    if (dist <= step || dist < 8) {
+      e.hp -= b.dmg; scoreDamage += b.dmg;
+      if (b.type === 'fire') { e.burn = Math.max(e.burn, b.burnSec); e.burnDps = b.burnDps; }
+      if (b.type === 'crypt') { e.slow = Math.max(e.slow, b.slowSec); e.slowPct = Math.max(e.slowPct, b.slowPct); }
+      bullets.splice(i, 1);
+    } else {
+      b.x += (dx / dist) * step;
+      b.y += (dy / dist) * step;
+    }
+  }
+}
+
+function stepBeams(dt) {
+  for (let i = beams.length - 1; i >= 0; i--) {
+    const bm = beams[i];
+    bm.ttl -= dt;
+    if (bm.ttl <= 0) { beams.splice(i, 1); continue; }
+    // Apply beam tick damage to enemies near the beam line
+    const len = Math.hypot(bm.x2 - bm.x1, bm.y2 - bm.y1);
+    const nx = (bm.x2 - bm.x1) / (len || 1);
+    const ny = (bm.y2 - bm.y1) / (len || 1);
+    const width = 10;
+    for (let e of enemies) {
+      // Distance from point to line segment
+      const px = e.x - bm.x1, py = e.y - bm.y1;
+      const proj = Math.max(0, Math.min(len, px * nx + py * ny));
+      const cx = bm.x1 + nx * proj, cy = bm.y1 + ny * proj;
+      const d = Math.hypot(e.x - cx, e.y - cy);
+      if (d < width) {
+        const dealt = bm.dmg * dt * 12; e.hp -= dealt; scoreDamage += dealt;
+      }
+    }
+  }
+}
+
+function stepPendingShots(dt) {
+  for (let i = pendingShots.length - 1; i >= 0; i--) {
+    const s = pendingShots[i];
+    s.delay -= dt;
+    if (s.delay <= 0) { s.make(); pendingShots.splice(i, 1); }
+  }
+}
+
+function stepExplosions(dt) {
+  for (let i = explodeEffects.length - 1; i >= 0; i--) {
+    const ex = explodeEffects[i];
+    ex.ttl -= dt;
+    if (ex.ttl <= 0) explodeEffects.splice(i, 1);
+  }
+}
+
+function castFrostNova() {
+  const cost = 30;
+  if (mana < cost) return;
+  mana -= cost;
+  for (let e of enemies) { e.slow = Math.max(e.slow, 2.5); e.slowPct = Math.max(e.slowPct, 0.6); }
+}
+
+function inside(c, r) { return c >= 0 && r >= 0 && c < COLS && r < ROWS; }
+
+function draw() {
+  g.clear();
+
+  // Tiles
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const x = c * TILE, y = r * TILE;
+      const t = map[r][c];
+      const col = t === 'path' ? C.path : t === 'sand' ? C.sand : t === 'earth' ? C.earth : t === 'ice' ? C.ice : C.blocked;
+      g.fillStyle(col, 1).fillRect(x, y, TILE - 1, TILE - 1);
+    }
+  }
+
+  // Right UI panel background overlay
+  g.fillStyle(0x0e1822, 1).fillRect(MAP_W, 0, PANEL_W, 600);
+  g.lineStyle(2, 0x2a3a4a, 1).strokeRect(MAP_W + 1, 1, PANEL_W - 2, 598);
+  // Build preview hover
+  if (!gameEnded && hoverC >= 0 && hoverR >= 0 && hoverC < MAP_COLS && hoverR < ROWS) {
+    const c0 = Math.min(hoverC, MAP_COLS - 2);
+    const r0 = Math.min(hoverR, ROWS - 2);
+    const ok = terraformMode ? canTerraformPreview(c0, r0) : canPlaceTower(c0, r0, selectedBuild);
+    const col = selectedBuild === 'fire' ? C.fire : selectedBuild === 'den' ? C.den : C.crypt;
+    g.fillStyle(col, ok ? 0.35 : 0.15).fillRect(c0 * TILE + 1, r0 * TILE + 1, 2 * TILE - 2, 2 * TILE - 2);
+    if (!ok) g.lineStyle(2, 0xff4444, 0.7).strokeRect(c0 * TILE + 2, r0 * TILE + 2, 2 * TILE - 4, 2 * TILE - 4);
+  }
+
+  // Treasure base and gem icons
+  const base = gridToXY(treasure.c, treasure.r);
+  g.fillStyle(0xffff66, 1).fillCircle(base.x, base.y, 10).lineStyle(2, 0xffdd33).strokeCircle(base.x, base.y, 12);
+  for (let i = 0; i < gemsAtBase; i++) {
+    const gx = base.x + 16 + (i % 5) * 10;
+    const gy = base.y - 18 - Math.floor(i / 5) * 12;
+    drawGem(gx, gy, 8, 0x66ffe0);
+  }
+
+  // Gems on ground
+  for (let gm of gemsOnGround) drawGem(gm.x, gm.y, 7, 0x66ffe0);
+
+  // Towers
+  for (let t of towers) {
+    g.fillStyle(TOWERS[t.type].color, 1).fillRect(t.c * TILE + 1, t.r * TILE + 1, (t.w || 2) * TILE - 2, (t.h || 2) * TILE - 2);
+    g.lineStyle(1, 0x111111, 0.3).strokeCircle(t.x, t.y, t.range);
+  }
+
+  // Enemies
+  for (let e of enemies) {
+    g.fillStyle(C.enemy, 1).fillCircle(e.x, e.y, 9);
+    if (e.carrying) drawGem(e.x, e.y - 14, 5, 0xffff88);
+    // HP bar
+    const w = 22, h = 3, px = e.x - w / 2, py = e.y + 12;
+    g.fillStyle(C.hpBack, 1).fillRect(px, py, w, h);
+    const hpw = Math.max(0, Math.floor((e.hp / e.maxHp) * w));
+    g.fillStyle(C.hpFront, 1).fillRect(px, py, hpw, h);
+  }
+
+  // Bullets
+  for (let b of bullets) g.fillStyle(b.color, 1).fillCircle(b.x, b.y, 3);
+  // Beams
+  for (let bm of beams) {
+    g.lineStyle(3, 0xffaa66, 0.9).strokeLineShape(new Phaser.Geom.Line(bm.x1, bm.y1, bm.x2, bm.y2));
+  }
+  // Meteor preview/effects
+  if (meteorMode && hoverC >= 0 && hoverR >= 0 && hoverC < MAP_COLS && hoverR < ROWS) {
+    const px = (hoverC + 0.5) * TILE;
+    const py = (hoverR + 0.5) * TILE;
+    g.lineStyle(2, 0xff6666, 0.8).strokeCircle(px, py, METEOR_RADIUS);
+  }
+  for (let ex of explodeEffects) {
+    g.fillStyle(0xff6633, ex.ttl / 0.35).fillCircle(ex.x, ex.y, ex.r * (ex.ttl / 0.35));
+  }
+
+  // UI
+  const cost = 100 + towersBuilt * 10;
+  const nextReady = !waveInProgress && wave < totalWaves && enemies.length === 0 && spawnQueue.length === 0;
+  const waveText = wave >= totalWaves ? `${wave}/${totalWaves}` : `${Math.max(0, wave)}/${totalWaves}${nextReady ? ` (in ${Math.ceil(timeToNextWave)}s)` : ''}`;
+  uiText.setText(
+    `Wave ${waveText}\n` +
+    `Gems at Base: ${gemsAtBase}  Lost: ${gemsLost}\n` +
+    `Coins: ${coins}  Mana: ${Math.floor(mana)}  Score: ${Math.floor(scoreDamage)}\n` +
+    `[T] Terraform (100 mana)  [M] Meteor (200)\n` +
+    `Build: ${selectedBuild.toUpperCase()}  Cost: ${cost}\n` +
+    `Space: Frost Nova (30)  N: Next Wave`
+  );
+
+  // Button selection outlines
+  Object.values(uiButtons).forEach(b => {
+    const active = b.key === selectedBuild;
+    b.rect.setStrokeStyle(active ? 3 : 2, active ? 0xffff66 : 0xffffff, active ? 0.9 : 0.4);
+  });
+}
+
+function drawGem(x, y, s, col) {
+  g.fillStyle(col, 1);
+  g.beginPath();
+  g.moveTo(x, y - s);
+  g.lineTo(x + s, y);
+  g.lineTo(x, y + s);
+  g.lineTo(x - s, y);
+  g.closePath();
+  g.fillPath();
+}
+
+function endGame(won) {
+  gameEnded = true;
+  const scene = game.scene.scenes[0];
   const overlay = scene.add.graphics();
-  overlay.fillStyle(0x000000, 0.7);
-  overlay.fillRect(0, 0, 800, 600);
-
-  // Game Over title with glow effect
-  const gameOverText = scene.add.text(400, 300, 'GAME OVER', {
-    fontSize: '64px',
-    fontFamily: 'Arial, sans-serif',
-    color: '#ff0000',
-    align: 'center',
-    stroke: '#ff6666',
-    strokeThickness: 8
-  }).setOrigin(0.5);
-
-  // Pulsing animation for game over text
-  scene.tweens.add({
-    targets: gameOverText,
-    scale: { from: 1, to: 1.1 },
-    alpha: { from: 1, to: 0.8 },
-    duration: 800,
-    yoyo: true,
-    repeat: -1,
-    ease: 'Sine.easeInOut'
-  });
-
-  // Score display
-  scene.add.text(400, 400, 'SCORE: ' + score, {
-    fontSize: '36px',
-    fontFamily: 'Arial, sans-serif',
-    color: '#00ffff',
-    align: 'center',
-    stroke: '#000000',
-    strokeThickness: 4
-  }).setOrigin(0.5);
-
-  // Restart instruction with subtle animation
-  const restartText = scene.add.text(400, 480, 'Press R to Restart', {
-    fontSize: '24px',
-    fontFamily: 'Arial, sans-serif',
-    color: '#ffff00',
-    align: 'center',
-    stroke: '#000000',
-    strokeThickness: 3
-  }).setOrigin(0.5);
-
-  // Blinking animation for restart text
-  scene.tweens.add({
-    targets: restartText,
-    alpha: { from: 1, to: 0.3 },
-    duration: 600,
-    yoyo: true,
-    repeat: -1,
-    ease: 'Sine.easeInOut'
-  });
+  overlay.fillStyle(0x000000, 0.7).fillRect(0, 0, 800, 600);
+  const gemsSaved = Math.max(0, 5 - gemsLost);
+  const multGems = Math.max(1, gemsSaved);
+  const multPerfect = touchedGem ? 1 : 2;
+  const finalScore = Math.floor(scoreDamage * multGems * multPerfect);
+  const title = won ? 'YOU DEFENDED THE GEMS!' : 'THE GEMS ARE LOST';
+  const t = scene.add.text(400, 260, title, { fontFamily: 'Arial, sans-serif', fontSize: '36px', color: '#ffffff' }).setOrigin(0.5);
+  scene.add.text(400, 310, `Base: ${Math.floor(scoreDamage)}  x Gems:${multGems}  x Perfect:${multPerfect}`, { fontFamily: 'Arial, sans-serif', fontSize: '18px', color: '#66ffcc' }).setOrigin(0.5);
+  scene.add.text(400, 350, `Final Score: ${finalScore}`, { fontFamily: 'Arial, sans-serif', fontSize: '28px', color: '#ffff88' }).setOrigin(0.5);
+  scene.add.text(400, 400, 'Press R to Restart', { fontFamily: 'Arial, sans-serif', fontSize: '18px', color: '#ffff88' }).setOrigin(0.5);
 }
 
-function restartGame(scene) {
-  snake = [
-    { x: 75, y: 60 },
-    { x: 60, y: 60 },
-    { x: 45, y: 60 }
-  ];
-  direction = { x: 1, y: 0 };
-  nextDirection = { x: 1, y: 0 };
-  score = 0;
-  gameOver = false;
-  moveDelay = 150;
-  scoreText.setText('Score: 0');
-  spawnFood();
-  scene.scene.restart();
-}
-
-function playTone(scene, frequency, duration) {
-  const audioContext = scene.sound.context;
-  const oscillator = audioContext.createOscillator();
-  const gainNode = audioContext.createGain();
-
-  oscillator.connect(gainNode);
-  gainNode.connect(audioContext.destination);
-
-  oscillator.frequency.value = frequency;
-  oscillator.type = 'square';
-
-  gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
-
-  oscillator.start(audioContext.currentTime);
-  oscillator.stop(audioContext.currentTime + duration);
+function restart() {
+  // Reset all state
+  map = []; navPath = []; towers = []; enemies = []; bullets = []; gemsOnGround = [];
+  beams = []; explodeEffects = []; pendingShots = [];
+  coins = 330; mana = 50; wave = 0; waveInProgress = false; timeToNextWave = 10; spawnQueue = []; spawnTimer = 0; gemsAtBase = 5; gemsLost = 0; towersBuilt = 0; selectedBuild = 'fire'; gameEnded = false; scoreDamage = 0; touchedGem = false; terraformMode = false; meteorMode = false;
+  buildMapAndPath();
 }
