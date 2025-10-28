@@ -134,18 +134,19 @@ function setupInput(scene) {
     if (gameEnded) return;
     // If click is in the right UI panel, ignore build handling (buttons handle it)
     if (p.x >= MAP_W) return;
-    let c = Math.floor(p.x / TILE);
-    let r = Math.floor(p.y / TILE);
-    if (!inside(c, r)) return;
-    c = Math.min(c, MAP_COLS - 2);
-    r = Math.min(r, ROWS - 2);
-    if (terraformMode) {
-      tryTerraform(c, r);
-      return;
-    }
+    const cc = Math.floor(p.x / TILE);
+    const rr = Math.floor(p.y / TILE);
+    if (!inside(cc, rr)) return;
+    let c = Math.min(cc, MAP_COLS - 2);
+    let r = Math.min(rr, ROWS - 2);
+    // Modes: only consume the click if the action can execute; otherwise fall through to building
     if (meteorMode) {
-      tryMeteor(p.x, p.y);
-      return;
+      if (mana >= METEOR_COST) { tryMeteor(p.x, p.y); return; }
+      meteorMode = false;
+    }
+    if (terraformMode) {
+      if (mana >= 100 && canTerraformAt(cc, rr)) { tryTerraformGroup(cc, rr); return; }
+      terraformMode = false;
     }
     if (!canPlaceTower(c, r, selectedBuild)) return;
     const cost = 100 + towersBuilt * 10;
@@ -336,27 +337,32 @@ function canPlaceTower(c0, r0, type) {
   return true;
 }
 
-function tryTerraform(c0, r0) {
-  // Convert 2x2 of blocked (non-path) to chosen terrain using 100 mana
+function tryTerraformGroup(c0, r0) {
+  // Convert the entire connected component of 'blocked' tiles to chosen terrain
   if (mana < 100) return;
-  if (!canTerraformPreview(c0, r0)) return;
+  if (!canTerraformAt(c0, r0)) return;
   mana -= 100;
   const targetType = selectedBuild === 'fire' ? 'sand' : selectedBuild === 'den' ? 'earth' : 'ice';
-  for (let r = r0; r < r0 + 2; r++) {
-    for (let c = c0; c < c0 + 2; c++) {
-      map[r][c] = targetType;
-    }
+  const q = [{ c: c0, r: r0 }];
+  const seen = new Set();
+  const key = (c, r) => c + ',' + r;
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+  while (q.length) {
+    const { c, r } = q.shift();
+    const k = key(c, r);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    if (!inside(c, r)) continue;
+    if (c >= MAP_COLS) continue; // keep within build area
+    if (map[r][c] !== 'blocked') continue;
+    map[r][c] = targetType;
+    for (let d of dirs) q.push({ c: c + d[0], r: r + d[1] });
   }
+  terraformMode = false;
 }
 
-function canTerraformPreview(c0, r0) {
-  for (let r = r0; r < r0 + 2; r++) {
-    for (let c = c0; c < c0 + 2; c++) {
-      if (!inside(c, r)) return false;
-      if (map[r][c] === 'path') return false;
-    }
-  }
-  return true;
+function canTerraformAt(c0, r0) {
+  return inside(c0, r0) && c0 < MAP_COLS && map[r0][c0] === 'blocked';
 }
 
 function tryMeteor(px, py) {
@@ -679,14 +685,20 @@ function draw() {
   // Right UI panel background overlay
   g.fillStyle(0x0e1822, 1).fillRect(MAP_W, 0, PANEL_W, 600);
   g.lineStyle(2, 0x2a3a4a, 1).strokeRect(MAP_W + 1, 1, PANEL_W - 2, 598);
-  // Build preview hover
+  // Build/Terraform preview hover
   if (!gameEnded && hoverC >= 0 && hoverR >= 0 && hoverC < MAP_COLS && hoverR < ROWS) {
-    const c0 = Math.min(hoverC, MAP_COLS - 2);
-    const r0 = Math.min(hoverR, ROWS - 2);
-    const ok = terraformMode ? canTerraformPreview(c0, r0) : canPlaceTower(c0, r0, selectedBuild);
     const col = selectedBuild === 'fire' ? C.fire : selectedBuild === 'den' ? C.den : C.crypt;
-    g.fillStyle(col, ok ? 0.35 : 0.15).fillRect(c0 * TILE + 1, r0 * TILE + 1, 2 * TILE - 2, 2 * TILE - 2);
-    if (!ok) g.lineStyle(2, 0xff4444, 0.7).strokeRect(c0 * TILE + 2, r0 * TILE + 2, 2 * TILE - 4, 2 * TILE - 4);
+    if (terraformMode) {
+      const ok = canTerraformAt(hoverC, hoverR);
+      g.fillStyle(col, ok ? 0.35 : 0.15).fillRect(hoverC * TILE + 1, hoverR * TILE + 1, TILE - 2, TILE - 2);
+      if (!ok) g.lineStyle(2, 0xff4444, 0.7).strokeRect(hoverC * TILE + 2, hoverR * TILE + 2, TILE - 4, TILE - 4);
+    } else {
+      const c0 = Math.min(hoverC, MAP_COLS - 2);
+      const r0 = Math.min(hoverR, ROWS - 2);
+      const ok = canPlaceTower(c0, r0, selectedBuild);
+      g.fillStyle(col, ok ? 0.35 : 0.15).fillRect(c0 * TILE + 1, r0 * TILE + 1, 2 * TILE - 2, 2 * TILE - 2);
+      if (!ok) g.lineStyle(2, 0xff4444, 0.7).strokeRect(c0 * TILE + 2, r0 * TILE + 2, 2 * TILE - 4, 2 * TILE - 4);
+    }
   }
 
   // Treasure base and gem icons
