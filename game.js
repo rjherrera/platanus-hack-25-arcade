@@ -82,19 +82,19 @@ const C = {
 
 // Enemy blueprints
 const ENEMIES = {
-  goblin: { hp: 40, speed: 80, reward: 8 },
-  orc: { hp: 120, speed: 60, reward: 15 },
-  troll: { hp: 320, speed: 40, reward: 35 }
+  goblin: { hp: 50, speed: 80, reward: 8 },
+  orc: { hp: 150, speed: 60, reward: 15 },
+  troll: { hp: 380, speed: 40, reward: 35 }
 };
 
 // Tower blueprints
 const TOWERS = {
-  // Fire: frequent, low-damage continuous beams (nerfed)
-  fire: { range: 90, rate: 0.08, dmg: 2, bullet: 240, burnDps: 6, burnSec: 3, color: C.fire },
-  // Den: slower rate, higher damage per shot
-  den: { range: 120, rate: 0.5, dmg: 14, bullet: 320, color: C.den },
-  // Crypt: burst of 3 sequential shots with slow
-  crypt: { range: 120, rate: 1.2, dmg: 18, bullet: 200, slowPct: 0.45, slowSec: 2.2, color: C.crypt }
+  // Fire: frequent, low-damage continuous beams (nerfed more)
+  fire: { range: 90, rate: 0.12, dmg: 1, bullet: 240, burnDps: 6, burnSec: 3, color: C.fire },
+  // Den: slower rate, lower DPS
+  den: { range: 120, rate: 0.8, dmg: 12, bullet: 320, color: C.den },
+  // Crypt: slower cycle, slightly less damage
+  crypt: { range: 120, rate: 1.6, dmg: 16, bullet: 200, slowPct: 0.45, slowSec: 2.2, color: C.crypt }
 };
 
 // Path helpers
@@ -482,7 +482,7 @@ function spawnEnemy(kind) {
   const pathPts = pathCells.map(p => gridToXY(p.c, p.r));
   const p0 = pathPts[0];
   const bp = ENEMIES[kind];
-  const hpScale = 1 + Math.max(0, wave - 1) * 0.18;
+  const hpScale = 1 + Math.max(0, wave - 1) * 0.22;
   enemies.push({
     kind,
     x: p0.x,
@@ -526,6 +526,10 @@ function stepEnemies(dt) {
         e.carrying = true;
         gemsAtBase -= 1;
         touchedGem = true;
+        e.idx = pathPts.length - 1;
+        e.dir = -1;
+      } else if (e.dir === +1 && (!e.carrying) && (tgtIdx === pathPts.length - 1 || nearTreasure(e)) && gemsAtBase <= 0) {
+        // No gems at base: turn around to exit so game doesn't stall
         e.idx = pathPts.length - 1;
         e.dir = -1;
       } else if (e.dir === -1 && e.idx === 0) {
@@ -670,7 +674,7 @@ function stepBeams(dt) {
       const cx = bm.x1 + nx * proj, cy = bm.y1 + ny * proj;
       const d = Math.hypot(e.x - cx, e.y - cy);
       if (d < width) {
-        const dealt = bm.dmg * dt * 12; e.hp -= dealt; scoreDamage += dealt;
+        const dealt = bm.dmg * dt * 10; e.hp -= dealt; scoreDamage += dealt;
       }
     }
   }
